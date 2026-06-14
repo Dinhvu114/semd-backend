@@ -97,7 +97,20 @@ chore(config): thêm dependency hibernate-spatial
 
 ---
 
-## 6. File không được push lên Git
+## 6. Quy tắc Database Migration (Flyway)
+
+- **Thư mục chứa file migration**: `src/main/resources/db/migration/` (Chú ý: Đây phải là cấu trúc thư mục lồng nhau `db/migration`, **không** được tạo thư mục chứa dấu chấm dạng `db.migration`).
+- **Quy tắc đặt tên file**: `V<Version>__<Mô_tả_ngắn>.sql` (Bắt buộc phải có **2 dấu gạch dưới `__`** sau số phiên bản). Ví dụ: `V9__add_status_column.sql`.
+- **Tuyệt đối không chỉnh sửa các file SQL migration cũ** đã được merge vào nhánh chung (`develop` hoặc `main`). Việc chỉnh sửa file cũ sẽ làm thay đổi mã băm (checksum) và làm ứng dụng của toàn bộ các thành viên bị sập lỗi khởi động.
+- **Nếu cần thay đổi cấu trúc DB**: Luôn viết thêm file SQL mới với số phiên bản tăng dần (ví dụ `V9`, `V10`...) chứa các câu lệnh chỉnh sửa (`ALTER TABLE`, `CREATE TABLE`...) chứ không sửa file cũ.
+- **Khắc phục lỗi lệch Checksum (nếu lỡ tay sửa file cũ ở local)**:
+  - *Cách 1 (Khuyên dùng):* Chạy lệnh `git checkout -- <đường_dẫn_file>` để khôi phục trạng thái ban đầu của file SQL.
+  - *Cách 2:* Drop database trống và chạy lại ứng dụng để Flyway dựng lại DB từ đầu.
+  - *Cách 3:* Cấu hình tạm thời `spring.flyway.repair-on-migrate: true` trong `application.yaml` để sửa lại mã băm dưới DB, chạy xong ứng dụng cần xóa dòng này đi.
+
+---
+
+## 7. File không được push lên Git
 
 ```gitignore
 target/
@@ -109,10 +122,11 @@ application-local.yml
 
 ---
 
-## 7. Checklist trước khi tạo Pull Request
+## 8. Checklist trước khi tạo Pull Request
 
 - [ ] `mvn spring-boot:run` chạy không lỗi
 - [ ] Không commit password, file bí mật
 - [ ] Commit message đúng format
 - [ ] Không có `System.out.println` thừa
 - [ ] Đã test API trên Swagger UI
+
