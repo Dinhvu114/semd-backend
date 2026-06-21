@@ -34,6 +34,12 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<BaseResponse<Void>> handleIllegalArgumentException(IllegalArgumentException ex) {
+        BaseResponse<Void> response = BaseResponse.fail(ex.getMessage(), 400);
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<BaseResponse<Void>> handleGeneralException(Exception ex) {
         ex.printStackTrace(); // Log the stack trace for debugging
