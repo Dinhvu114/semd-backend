@@ -24,9 +24,8 @@ public record UserRequest(
     @Size(max = 100, message = "Email không vượt quá 100 ký tự")
     String email,
 
-    @NotBlank(message = "Vai trò không được để trống")
-    @Size(max = 20, message = "Vai trò không vượt quá 20 ký tự")
-    String role,
+    @jakarta.validation.constraints.NotEmpty(message = "Vai trò không được để trống")
+    java.util.Set<String> roles,
 
     Boolean isActive
 ) {}

@@ -10,25 +10,33 @@ import org.springframework.security.core.userdetails.UserDetails;
 public class UserPrincipal implements UserDetails {
     private final Integer id;
     private final String username;
-    private final String role;
+    private final Collection<String> roles;
 
-    public UserPrincipal(Integer id, String username, String role) {
+    public UserPrincipal(Integer id, String username, Collection<String> roles) {
         this.id = id;
         this.username = username;
-        this.role = role;
+        this.roles = roles != null ? roles : java.util.Collections.emptyList();
     }
 
     public Integer getId() {
         return id;
     }
 
+    public Collection<String> getRoles() {
+        return roles;
+    }
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        String normalized = role.toUpperCase();
-        if (!normalized.startsWith("ROLE_")) {
-            normalized = "ROLE_" + normalized;
-        }
-        return List.of(new SimpleGrantedAuthority(normalized));
+        return roles.stream()
+                .map(role -> {
+                    String normalized = role.toUpperCase();
+                    if (!normalized.startsWith("ROLE_")) {
+                        normalized = "ROLE_" + normalized;
+                    }
+                    return new SimpleGrantedAuthority(normalized);
+                })
+                .toList();
     }
 
     @Override

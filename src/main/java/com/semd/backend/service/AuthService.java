@@ -56,7 +56,7 @@ public class AuthService {
                 user.getId(),
                 user.getUsername(),
                 user.getFullName(),
-                user.getRole()
+                user.getRoles().stream().map(com.semd.backend.entity.Role::getName).collect(java.util.stream.Collectors.toSet())
         );
     }
 
@@ -99,7 +99,7 @@ public class AuthService {
                 user.getId(),
                 user.getUsername(),
                 user.getFullName(),
-                user.getRole()
+                user.getRoles().stream().map(com.semd.backend.entity.Role::getName).collect(java.util.stream.Collectors.toSet())
         );
     }
 

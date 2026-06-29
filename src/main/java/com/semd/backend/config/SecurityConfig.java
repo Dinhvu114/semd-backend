@@ -1,17 +1,27 @@
 package com.semd.backend.config;
 
+import com.semd.backend.security.JwtAuthFiller;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
+
+    private final JwtAuthFiller jwtAuthFiller;
+
+    public SecurityConfig(JwtAuthFiller jwtAuthFiller) {
+        this.jwtAuthFiller = jwtAuthFiller;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -45,7 +55,22 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setContentType("application/json;charset=UTF-8");
+                            response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED);
+                            response.getWriter().write("{\"code\":401,\"success\":false,\"message\":\"Chưa đăng nhập hoặc token không hợp lệ\",\"data\":null}");
+                        })
+                )
+                .authorizeHttpRequests(auth -> auth
+                        // Cho phép truy cập tự do vào các tài liệu API & các endpoint Auth
+                        .requestMatchers("/api/v1/auth/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // Mọi API khác cần phải đăng nhập mới sử dụng được
+                        .anyRequest().authenticated()
+                )
+                // Đăng ký JwtAuthFiller vào chuỗi lọc Spring Security
+                .addFilterBefore(jwtAuthFiller, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 }

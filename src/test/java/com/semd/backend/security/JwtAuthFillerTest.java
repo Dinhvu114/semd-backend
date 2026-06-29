@@ -51,7 +51,7 @@ class JwtAuthFillerTest {
         when(jwtUtil.isRefreshToken(token)).thenReturn(false);
         when(jwtUtil.extractUsername(token)).thenReturn("testuser");
         when(jwtUtil.extractUserId(token)).thenReturn(1);
-        when(jwtUtil.extractRole(token)).thenReturn("USER");
+        when(jwtUtil.extractRoles(token)).thenReturn(java.util.List.of("USER"));
 
         jwtAuthFiller.doFilterInternal(request, response, filterChain);
 

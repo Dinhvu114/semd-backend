@@ -4,7 +4,9 @@ import com.semd.backend.dto.AuthResponse;
 import com.semd.backend.dto.LoginRequest;
 import com.semd.backend.dto.TokenRefreshRequest;
 import com.semd.backend.entity.User;
+import com.semd.backend.entity.Role;
 import com.semd.backend.exception.AuthException;
+import java.util.Set;
 import com.semd.backend.repository.UserRepository;
 import com.semd.backend.util.JwtUtil;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,7 +42,7 @@ class AuthServiceTest {
         testUser.setUsername("testuser");
         testUser.setPasswordHash("hashed_password");
         testUser.setFullName("Test User");
-        testUser.setRole("USER");
+        testUser.setRoles(Set.of(new Role("USER")));
         testUser.setIsActive(true);
     }
 

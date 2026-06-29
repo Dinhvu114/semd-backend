@@ -1,7 +1,9 @@
 package com.semd.backend.util;
 
 import com.semd.backend.entity.User;
+import com.semd.backend.entity.Role;
 import org.junit.jupiter.api.BeforeEach;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -22,7 +24,7 @@ class JwtUtilTest {
         testUser = new User();
         testUser.setId(123);
         testUser.setUsername("testuser");
-        testUser.setRole("ROLE_USER");
+        testUser.setRoles(Set.of(new Role("ROLE_USER")));
     }
 
     @Test
@@ -39,7 +41,7 @@ class JwtUtilTest {
 
         assertEquals("testuser", jwtUtil.extractUsername(token));
         assertEquals(123, jwtUtil.extractUserId(token));
-        assertEquals("ROLE_USER", jwtUtil.extractRole(token));
+        assertTrue(jwtUtil.extractRoles(token).contains("ROLE_USER"));
 
         assertTrue(jwtUtil.isTokenValid(token));
         assertTrue(jwtUtil.isTokenValid(token, "testuser"));
@@ -56,7 +58,7 @@ class JwtUtilTest {
 
         assertEquals("testuser", jwtUtil.extractUsername(token));
         assertNull(jwtUtil.extractUserId(token));
-        assertNull(jwtUtil.extractRole(token));
+        assertNull(jwtUtil.extractRoles(token));
 
         assertTrue(jwtUtil.isTokenValid(token));
         assertTrue(jwtUtil.isTokenValid(token, "testuser"));

@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,6 +26,7 @@ public class ProviderController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROVIDER_ADMIN')")
     @Operation(summary = "Tạo mới đơn vị xe/phòng khám", description = "Đăng ký một đơn vị cung cấp tài nguyên mới liên kết với một người dùng (Owner)")
     public ResponseEntity<BaseResponse<ProviderDto>> createProvider(@Valid @RequestBody ProviderRequest request) {
         ProviderDto result = service.createProvider(request);
@@ -32,6 +34,7 @@ public class ProviderController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     @Operation(summary = "Lấy tất cả các đơn vị cung cấp", description = "Trả về danh sách toàn bộ các nhà cung cấp hoạt động trong hệ thống")
     public ResponseEntity<BaseResponse<List<ProviderDto>>> getAllProviders() {
         List<ProviderDto> result = service.getAllProviders();
@@ -39,6 +42,7 @@ public class ProviderController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER', 'PROVIDER_ADMIN')")
     @Operation(summary = "Lấy đơn vị cung cấp theo ID", description = "Chi tiết một đơn vị cung cấp theo ID")
     public ResponseEntity<BaseResponse<ProviderDto>> getProviderById(@PathVariable Integer id) {
         ProviderDto result = service.getProviderById(id);
@@ -46,6 +50,7 @@ public class ProviderController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROVIDER_ADMIN')")
     @Operation(summary = "Cập nhật thông tin đơn vị cung cấp", description = "Cập nhật thông tin chi tiết của đơn vị cung cấp theo ID")
     public ResponseEntity<BaseResponse<ProviderDto>> updateProvider(
             @PathVariable Integer id,
@@ -55,6 +60,7 @@ public class ProviderController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Xóa đơn vị cung cấp", description = "Xóa một đơn vị cung cấp khỏi hệ thống theo ID")
     public ResponseEntity<BaseResponse<Void>> deleteProvider(@PathVariable Integer id) {
         service.deleteProvider(id);

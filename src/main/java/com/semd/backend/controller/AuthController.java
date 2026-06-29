@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -23,6 +24,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
+    @PreAuthorize("permitAll()")
     @Operation(summary = "Đăng nhập hệ thống", description = "Xác thực người dùng bằng username và password, trả về Access Token và Refresh Token")
     public ResponseEntity<BaseResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request);
@@ -30,6 +32,7 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
+    @PreAuthorize("permitAll()")
     @Operation(summary = "Làm mới Access Token", description = "Sử dụng Refresh Token hợp lệ để tạo cặp Access Token và Refresh Token mới (Token Rotation)")
     public ResponseEntity<BaseResponse<AuthResponse>> refresh(@Valid @RequestBody TokenRefreshRequest request) {
         AuthResponse response = authService.refreshToken(request);
@@ -37,6 +40,7 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
+    @PreAuthorize("permitAll()")
     @Operation(summary = "Đăng xuất", description = "Thu hồi Refresh Token trên hệ thống Redis")
     public ResponseEntity<BaseResponse<Void>> logout(@Valid @RequestBody TokenRefreshRequest request) {
         authService.logout(request.refreshToken());

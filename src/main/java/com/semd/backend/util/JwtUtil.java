@@ -37,10 +37,14 @@ public class JwtUtil {
     }
 
     public String generateAccessToken(User user) {
+        java.util.List<String> roleNames = user.getRoles().stream()
+                .map(com.semd.backend.entity.Role::getName)
+                .toList();
+
         return Jwts.builder()
                 .setSubject(user.getUsername())
                 .claim("userId", user.getId())
-                .claim("role", user.getRole())
+                .claim("roles", roleNames)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + accessTokenExpiration))
                 .signWith(key, SignatureAlgorithm.HS256)
@@ -61,8 +65,23 @@ public class JwtUtil {
         return extractClaim(token, Claims::getSubject);
     }
 
-    public String extractRole(String token) {
-        return extractClaim(token, claims -> claims.get("role", String.class));
+    @SuppressWarnings("unchecked")
+    public java.util.Collection<String> extractRoles(String token) {
+        try {
+            return extractClaim(token, claims -> {
+                Object roles = claims.get("roles");
+                if (roles instanceof java.util.Collection) {
+                    return (java.util.Collection<String>) roles;
+                }
+                Object role = claims.get("role");
+                if (role instanceof String roleStr) {
+                    return java.util.List.of(roleStr);
+                }
+                return null;
+            });
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public Integer extractUserId(String token) {

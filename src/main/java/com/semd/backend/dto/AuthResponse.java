@@ -8,5 +8,5 @@ public record AuthResponse(
     Integer userId,
     String username,
     String fullName,
-    String role
+    java.util.Set<String> roles
 ) {}

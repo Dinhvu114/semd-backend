@@ -8,7 +8,7 @@ public record UserDto(
     String fullName,
     String phoneNumber,
     String email,
-    String role,
+    java.util.Set<String> roles,
     Boolean isActive,
     LocalDateTime createdAt
 ) {}

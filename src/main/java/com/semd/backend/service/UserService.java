@@ -4,6 +4,8 @@ import com.semd.backend.dto.UserDto;
 import com.semd.backend.dto.UserRequest;
 import com.semd.backend.entity.User;
 import com.semd.backend.exception.ResourceNotFoundException;
+import com.semd.backend.entity.Role;
+import com.semd.backend.repository.RoleRepository;
 import com.semd.backend.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -11,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -18,10 +21,12 @@ public class UserService {
 
     private final UserRepository repository;
     private final PasswordEncoder passwordEncoder;
+    private final RoleRepository roleRepository;
 
-    public UserService(UserRepository repository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository repository, PasswordEncoder passwordEncoder, RoleRepository roleRepository) {
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
+        this.roleRepository = roleRepository;
     }
 
     @Transactional
@@ -41,7 +46,11 @@ public class UserService {
         user.setFullName(request.fullName());
         user.setPhoneNumber(request.phoneNumber());
         user.setEmail(request.email());
-        user.setRole(request.role());
+        Set<Role> roles = request.roles().stream()
+                .map(roleName -> roleRepository.findByName(roleName)
+                        .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy vai trò: " + roleName)))
+                .collect(Collectors.toSet());
+        user.setRoles(roles);
         user.setIsActive(request.isActive() != null ? request.isActive() : true);
         user.setCreatedAt(LocalDateTime.now());
 
@@ -79,7 +88,11 @@ public class UserService {
         user.setFullName(request.fullName());
         user.setPhoneNumber(request.phoneNumber());
         user.setEmail(request.email());
-        user.setRole(request.role());
+        Set<Role> roles = request.roles().stream()
+                .map(roleName -> roleRepository.findByName(roleName)
+                        .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy vai trò: " + roleName)))
+                .collect(Collectors.toSet());
+        user.setRoles(roles);
         if (request.isActive() != null) {
             user.setIsActive(request.isActive());
         }
@@ -97,13 +110,16 @@ public class UserService {
     }
 
     private UserDto mapToDto(User user) {
+        Set<String> roleNames = user.getRoles().stream()
+                .map(Role::getName)
+                .collect(Collectors.toSet());
         return new UserDto(
                 user.getId(),
                 user.getUsername(),
                 user.getFullName(),
                 user.getPhoneNumber(),
                 user.getEmail(),
-                user.getRole(),
+                roleNames,
                 user.getIsActive(),
                 user.getCreatedAt()
         );

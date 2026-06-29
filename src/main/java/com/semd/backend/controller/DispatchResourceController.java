@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,6 +27,7 @@ public class DispatchResourceController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROVIDER_ADMIN')")
     @Operation(summary = "Thêm mới xe cứu thương", description = "Tạo mới tài nguyên xe cứu thương / đội ngũ y tế")
     public ResponseEntity<BaseResponse<DispatchResourceDto>> createResource(@Valid @RequestBody DispatchResourceRequest request) {
         DispatchResourceDto result = service.createResource(request);
@@ -33,6 +35,7 @@ public class DispatchResourceController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER', 'PROVIDER_ADMIN')")
     @Operation(summary = "Lấy danh sách tất cả xe cứu thương", description = "Trả về danh sách toàn bộ các xe cứu thương đang quản lý")
     public ResponseEntity<BaseResponse<List<DispatchResourceDto>>> getAllResources() {
         List<DispatchResourceDto> result = service.getAllResources();
@@ -40,6 +43,7 @@ public class DispatchResourceController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER', 'PROVIDER_ADMIN', 'DRIVER')")
     @Operation(summary = "Lấy thông tin chi tiết xe cứu thương", description = "Lấy chi tiết thông tin xe cứu thương theo ID")
     public ResponseEntity<BaseResponse<DispatchResourceDto>> getResourceById(@PathVariable Integer id) {
         DispatchResourceDto result = service.getResourceById(id);
@@ -47,6 +51,7 @@ public class DispatchResourceController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROVIDER_ADMIN')")
     @Operation(summary = "Cập nhật thông tin xe cứu thương", description = "Cập nhật thông tin chi tiết xe cứu thương theo ID")
     public ResponseEntity<BaseResponse<DispatchResourceDto>> updateResource(
             @PathVariable Integer id,
@@ -56,6 +61,7 @@ public class DispatchResourceController {
     }
 
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROVIDER_ADMIN', 'DISPATCHER', 'DRIVER')")
     @Operation(summary = "Thay đổi trạng thái hoạt động của xe", description = "Cập nhật nhanh trạng thái hoạt động (ví dụ: AVAILABLE, BUSY, MAINTENANCE...)")
     public ResponseEntity<BaseResponse<DispatchResourceDto>> updateResourceStatus(
             @PathVariable Integer id,
@@ -65,6 +71,7 @@ public class DispatchResourceController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Xóa xe cứu thương", description = "Xóa xe cứu thương khỏi hệ thống theo ID")
     public ResponseEntity<BaseResponse<Void>> deleteResource(@PathVariable Integer id) {
         service.deleteResource(id);
