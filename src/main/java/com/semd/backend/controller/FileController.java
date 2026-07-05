@@ -21,17 +21,15 @@ public class FileController {
         this.fileStorageService = fileStorageService;
     }
 
-    @PostMapping("/upload")
+    @PostMapping(value = "/upload", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Upload file", description = "Upload file âm thanh hoặc ảnh lên MinIO")
-    public ResponseEntity<Map<String, String>> upload(
-            @RequestParam("file") MultipartFile file) {
+    public ResponseEntity<com.semd.backend.dto.FileUploadResponse> upload(
+            @RequestPart("file") MultipartFile file) {
 
-        String fileUrl = fileStorageService.uploadFile(file);
 
-        return ResponseEntity.ok(Map.of(
-                "message", "Upload thành công!",
-                "url", fileUrl
-        ));
+        com.semd.backend.dto.FileUploadResponse response = fileStorageService.uploadFile(file);
+        return ResponseEntity.ok(response);
     }
+
 }
