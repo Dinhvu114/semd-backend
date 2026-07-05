@@ -64,10 +64,11 @@ public class SecurityConfig {
                         })
                 )
                 .authorizeHttpRequests(auth -> auth
-                        // Cho phép truy cập tự do vào các tài liệu API & các endpoint Auth
-                        .requestMatchers("/api/v1/auth/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // Cho phép truy cập tự do vào các tài liệu API, endpoint Auth và callback AI
+                        .requestMatchers("/api/v1/auth/**", "/api/v1/calls/callback", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // Mọi API khác cần phải đăng nhập mới sử dụng được
                         .anyRequest().authenticated()
+
                 )
                 // Đăng ký JwtAuthFiller vào chuỗi lọc Spring Security
                 .addFilterBefore(jwtAuthFiller, UsernamePasswordAuthenticationFilter.class);

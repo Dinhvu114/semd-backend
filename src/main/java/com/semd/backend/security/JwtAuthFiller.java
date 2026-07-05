@@ -38,8 +38,11 @@ public class JwtAuthFiller extends OncePerRequestFilter {
                     if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                         Integer userId = jwtUtil.extractUserId(token);
                         java.util.Collection<String> roles = jwtUtil.extractRoles(token);
+                        String fullName = jwtUtil.extractFullName(token);
+                        String phoneNumber = jwtUtil.extractPhoneNumber(token);
 
-                        UserPrincipal principal = new UserPrincipal(userId, username, roles);
+                        UserPrincipal principal = new UserPrincipal(userId, username, roles, fullName, phoneNumber);
+
 
                         UsernamePasswordAuthenticationToken authentication =
                                 new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());

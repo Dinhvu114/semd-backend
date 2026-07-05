@@ -11,20 +11,33 @@ public class UserPrincipal implements UserDetails {
     private final Integer id;
     private final String username;
     private final Collection<String> roles;
+    private final String fullName;
+    private final String phoneNumber;
 
-    public UserPrincipal(Integer id, String username, Collection<String> roles) {
+    public UserPrincipal(Integer id, String username, Collection<String> roles, String fullName, String phoneNumber) {
         this.id = id;
         this.username = username;
         this.roles = roles != null ? roles : java.util.Collections.emptyList();
+        this.fullName = fullName;
+        this.phoneNumber = phoneNumber;
     }
 
     public Integer getId() {
         return id;
     }
 
+    public String getFullName() {
+        return fullName;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
     public Collection<String> getRoles() {
         return roles;
     }
+
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

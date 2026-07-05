@@ -45,6 +45,8 @@ public class JwtUtil {
                 .setSubject(user.getUsername())
                 .claim("userId", user.getId())
                 .claim("roles", roleNames)
+                .claim("fullName", user.getFullName())
+                .claim("phoneNumber", user.getPhoneNumber())
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + accessTokenExpiration))
                 .signWith(key, SignatureAlgorithm.HS256)
@@ -92,6 +94,14 @@ public class JwtUtil {
             }
             return null;
         });
+    }
+
+    public String extractFullName(String token) {
+        return extractClaim(token, claims -> claims.get("fullName", String.class));
+    }
+
+    public String extractPhoneNumber(String token) {
+        return extractClaim(token, claims -> claims.get("phoneNumber", String.class));
     }
 
     public Date extractExpiration(String token) {
