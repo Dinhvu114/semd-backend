@@ -16,7 +16,9 @@ public class EdgeNode {
     private String nodeName;
 
     @Column(name = "coverage_area", columnDefinition = "geometry(Polygon, 4326)")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Polygon coverageArea;
+
 
     @Column(name = "is_active")
     private Boolean isActive = true;

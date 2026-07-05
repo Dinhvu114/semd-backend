@@ -3,6 +3,8 @@ package com.semd.backend.entity;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.locationtech.jts.geom.Point;
 
 @Entity
 @Table(name = "emergency_calls")
@@ -82,4 +84,19 @@ public class EmergencyCall {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    @Column(name = "location", columnDefinition = "geography(Point, 4326)")
+    @JsonIgnore
+    private Point location;
+
+    public Point getLocation() { return location; }
+    public void setLocation(Point location) { this.location = location; }
+
+    public Double getLongitude() {
+        return location != null ? location.getX() : null;
+    }
+
+    public Double getLatitude() {
+        return location != null ? location.getY() : null;
+    }
 }

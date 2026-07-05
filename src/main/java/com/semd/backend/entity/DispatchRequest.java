@@ -35,6 +35,7 @@ public class DispatchRequest {
     private String urgencyLevel = "MEDIUM";
 
     @Column(name = "target_location", nullable = false, columnDefinition = "geography(Point, 4326)")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Point targetLocation;
 
     @Column(name = "status", length = 20)
@@ -83,4 +84,12 @@ public class DispatchRequest {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public Double getLongitude() {
+        return targetLocation != null ? targetLocation.getX() : null;
+    }
+
+    public Double getLatitude() {
+        return targetLocation != null ? targetLocation.getY() : null;
+    }
 }
