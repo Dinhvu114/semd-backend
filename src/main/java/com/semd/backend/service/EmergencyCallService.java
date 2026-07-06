@@ -25,7 +25,6 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
-
 @Service
 public class EmergencyCallService {
 
@@ -58,17 +57,6 @@ public class EmergencyCallService {
         this.edgeNodeRepository = edgeNodeRepository;
     }
 
-
-    /**
-     * Nhận yêu cầu tạo cuộc gọi khẩn cấp từ người dân (luồng cũ tương thích ngược).
-     */
-    public EmergencyCall createEmergencyCall(String reporterPhone, String reporterName, String audioObjectKey) {
-        return createEmergencyVoiceCall(reporterPhone, reporterName, null, null, audioObjectKey);
-    }
-
-    /**
-     * Nhận yêu cầu SOS từ nút SOS của người dân.
-     */
     public EmergencyCall createEmergencySosCall(String reporterPhone, String reporterName, Double latitude, Double longitude) {
         EmergencyCall call = new EmergencyCall();
         call.setReporterPhone(reporterPhone);
@@ -82,7 +70,6 @@ public class EmergencyCallService {
         
         EmergencyCall savedCall = callRepository.save(call);
 
-        // Ghi Audit Log cho hành động của người báo cáo
         saveAuditLog(savedCall, longitude, latitude);
 
         // Tự động tìm Vùng biên chứa tọa độ cuộc gọi

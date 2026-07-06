@@ -3,22 +3,24 @@ package com.semd.backend.controller;
 import com.semd.backend.entity.EmergencyCall;
 import com.semd.backend.service.EmergencyCallService;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.semd.backend.security.UserPrincipal;
+import com.semd.backend.dto.common.BaseResponse;
+import com.semd.backend.dto.emergencyCall.*;
 
 
 @RestController
 @RequestMapping("/api/v1/calls")
 @Tag(name = "Emergency Call", description = "API yêu cầu cấp cứu")
-@CrossOrigin(origins = "*") // Hỗ trợ CORS cho FE gọi thử nghiệm
+@CrossOrigin(origins = "*")
 public class EmergencyCallController {
 
     private final EmergencyCallService callService;
@@ -27,13 +29,9 @@ public class EmergencyCallController {
         this.callService = callService;
     }
 
-    /**
-     * API SOS: Tải lên ghi âm cuộc gọi cấp cứu kèm định vị.
-     * Sử dụng JWT để tự động trích xuất thông tin người báo cáo (không cho phép truyền thủ công).
-     * Endpoint: POST /api/v1/calls/voice
-     */
+    @Operation(summary = "Gọi cấp cứu", description = "Tải lên ghi âm cuộc gọi cấp cứu kèm định vị")
     @PostMapping("/voice")
-    public ResponseEntity<EmergencyCall> createVoiceCall(
+    public ResponseEntity<BaseResponse<EmergencyCall>> createVoiceCall(
             @RequestBody VoiceCallRequest request,
             @AuthenticationPrincipal UserPrincipal principal
     ) {
@@ -50,16 +48,13 @@ public class EmergencyCallController {
                 longitude,
                 request.audioObjectKey()
         );
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(call);
+        BaseResponse<EmergencyCall> response = new BaseResponse<>(202, true, "Thành công", call, null);
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
-    /**
-     * API SOS: Báo khẩn cấp nhanh (panic button) kèm định vị, không kèm file ghi âm.
-     * Sử dụng JWT để tự động trích xuất thông tin người báo cáo (không cho phép truyền thủ công).
-     * Endpoint: POST /api/v1/calls/sos
-     */
+    @Operation(summary = "Gửi định vị", description = "Tải lên định vị")
     @PostMapping("/sos")
-    public ResponseEntity<EmergencyCall> createSosCall(
+    public ResponseEntity<BaseResponse<EmergencyCall>> createSosCall(
             @RequestBody SosRequest request,
             @AuthenticationPrincipal UserPrincipal principal
     ) {
@@ -72,7 +67,8 @@ public class EmergencyCallController {
                 request.latitude(),
                 request.longitude()
         );
-        return ResponseEntity.status(HttpStatus.CREATED).body(call);
+        BaseResponse<EmergencyCall> response = new BaseResponse<>(200, true, "Thành công", call, null);
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
     @PostMapping("/callback")
@@ -86,37 +82,4 @@ public class EmergencyCallController {
         );
         return ResponseEntity.ok().build();
     }
-
-    /**
-     * Hợp đồng kết nối (DTO) nhận kết quả từ FastAPI
-     */
-    public record AICallbackRequest(
-        Integer call_id,
-        String transcript,
-        String urgency,
-        Double confidence,
-        java.util.List<String> symptoms
-    ) {}
-
-
-    /**
-     * Hợp đồng nhận yêu cầu SOS khẩn cấp (chỉ cần tọa độ vì tên và SĐT lấy từ JWT)
-     */
-    public record SosRequest(
-        Double latitude,
-        Double longitude
-    ) {}
-
-    /**
-     * Hợp đồng nhận yêu cầu SOS kèm file ghi âm (chỉ cần object key và tọa độ vì thông tin cá nhân lấy từ JWT)
-     */
-    public record VoiceCallRequest(
-        String audioObjectKey,
-        LocationDto location
-    ) {}
-
-    public record LocationDto(
-        Double latitude,
-        Double longitude
-    ) {}
 }
