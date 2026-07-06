@@ -73,4 +73,93 @@ public class FileStorageService {
         if (filename == null || !filename.contains(".")) return "";
         return filename.substring(filename.lastIndexOf("."));
     }
+
+    /**
+     * Liệt kê danh sách các đối tượng trên MinIO khớp với prefix
+     */
+    public java.util.List<com.semd.backend.dto.MinioObjectDto> listObjects(String prefix) {
+        java.util.List<com.semd.backend.dto.MinioObjectDto> objectList = new java.util.ArrayList<>();
+        try {
+            Iterable<io.minio.Result<io.minio.messages.Item>> results = minioClient.listObjects(
+                    io.minio.ListObjectsArgs.builder()
+                            .bucket(bucketName)
+                            .prefix(prefix)
+                            .recursive(true)
+                            .build()
+            );
+            for (io.minio.Result<io.minio.messages.Item> result : results) {
+                io.minio.messages.Item item = result.get();
+                if (!item.isDir()) {
+                    String contentType = java.net.URLConnection.guessContentTypeFromName(item.objectName());
+                    if (contentType == null) {
+                        contentType = "application/octet-stream";
+                    }
+                    objectList.add(new com.semd.backend.dto.MinioObjectDto(
+                            item.objectName(),
+                            item.size(),
+                            contentType,
+                            item.lastModified()
+                    ));
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Không thể liệt kê danh sách tệp tin từ MinIO: " + e.getMessage());
+        }
+        return objectList;
+    }
+
+    /**
+     * Lấy thông tin siêu dữ liệu (metadata) của đối tượng
+     */
+    public com.semd.backend.dto.MinioObjectDto getObjectMetadata(String objectKey) {
+        try {
+            io.minio.StatObjectResponse stat = minioClient.statObject(
+                    io.minio.StatObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(objectKey)
+                            .build()
+            );
+            return new com.semd.backend.dto.MinioObjectDto(
+                    stat.object(),
+                    stat.size(),
+                    stat.contentType(),
+                    stat.lastModified()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Không thể lấy thông tin metadata của tệp tin: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Download đối tượng nhị phân từ MinIO
+     */
+    public io.minio.GetObjectResponse downloadFile(String objectKey) {
+        try {
+            return minioClient.getObject(
+                    io.minio.GetObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(objectKey)
+                            .build()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Không thể tải tệp tin từ MinIO: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Xoá đối tượng khỏi MinIO
+     */
+    public void deleteFile(String objectKey) {
+        try {
+            minioClient.removeObject(
+                    io.minio.RemoveObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(objectKey)
+                            .build()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Không thể xóa tệp tin khỏi MinIO: " + e.getMessage());
+        }
+    }
 }
+

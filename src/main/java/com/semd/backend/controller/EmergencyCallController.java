@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.semd.backend.security.UserPrincipal;
 import com.semd.backend.dto.common.BaseResponse;
+import org.springframework.security.access.prepost.PreAuthorize;
+import java.util.List;
 import com.semd.backend.dto.emergencyCall.*;
 
 
@@ -31,7 +33,7 @@ public class EmergencyCallController {
 
     @Operation(summary = "Gọi cấp cứu", description = "Tải lên ghi âm cuộc gọi cấp cứu kèm định vị")
     @PostMapping("/voice")
-    public ResponseEntity<BaseResponse<EmergencyCall>> createVoiceCall(
+    public ResponseEntity<BaseResponse<Void>> createVoiceCall(
             @RequestBody VoiceCallRequest request,
             @AuthenticationPrincipal UserPrincipal principal
     ) {
@@ -41,33 +43,33 @@ public class EmergencyCallController {
         Double latitude = (request.location() != null) ? request.location().latitude() : null;
         Double longitude = (request.location() != null) ? request.location().longitude() : null;
 
-        EmergencyCall call = callService.createEmergencyVoiceCall(
+        callService.createEmergencyVoiceCall(
                 principal.getPhoneNumber(),
                 principal.getFullName(),
                 latitude,
                 longitude,
                 request.audioObjectKey()
         );
-        BaseResponse<EmergencyCall> response = new BaseResponse<>(202, true, "Thành công", call, null);
+        BaseResponse<Void> response = new BaseResponse<>(202, true, "Thành công", null, null);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
     @Operation(summary = "Gửi định vị", description = "Tải lên định vị")
     @PostMapping("/sos")
-    public ResponseEntity<BaseResponse<EmergencyCall>> createSosCall(
+    public ResponseEntity<BaseResponse<Void>> createSosCall(
             @RequestBody SosRequest request,
             @AuthenticationPrincipal UserPrincipal principal
     ) {
         if (principal == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        EmergencyCall call = callService.createEmergencySosCall(
+        callService.createEmergencySosCall(
                 principal.getPhoneNumber(),
                 principal.getFullName(),
                 request.latitude(),
                 request.longitude()
         );
-        BaseResponse<EmergencyCall> response = new BaseResponse<>(200, true, "Thành công", call, null);
+        BaseResponse<Void> response = new BaseResponse<>(202, true, "Thành công", null, null);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
@@ -81,5 +83,42 @@ public class EmergencyCallController {
                 request.symptoms()
         );
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/my-calls")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Lấy danh sách cuộc gọi của tôi", description = "Lấy toàn bộ danh sách cuộc gọi khẩn cấp do chính tài khoản này tạo ra")
+    public ResponseEntity<BaseResponse<List<EmergencyCall>>> getMyCalls(
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        List<EmergencyCall> calls = callService.getMyCalls(principal.getPhoneNumber());
+        return ResponseEntity.ok(BaseResponse.success(calls));
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Lấy chi tiết cuộc gọi", description = "Lấy thông tin chi tiết một cuộc gọi khẩn cấp theo ID (yêu cầu sở hữu hoặc quyền điều phối/admin)")
+    public ResponseEntity<BaseResponse<EmergencyCall>> getCallDetails(
+            @PathVariable("id") Integer id,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        EmergencyCall call = callService.getCallDetails(id)
+                .orElseThrow(() -> new com.semd.backend.exception.ResourceNotFoundException("Không tìm thấy cuộc gọi ID: " + id));
+
+        // Phân quyền: Chỉ cho phép chính chủ xem cuộc gọi của họ, trừ khi là ADMIN hoặc DISPATCHER
+        boolean isAdminOrDispatcher = principal.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_DISPATCHER"));
+        if (!isAdminOrDispatcher && !call.getReporterPhone().equals(principal.getPhoneNumber())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(BaseResponse.fail("Bạn không có quyền xem thông tin chi tiết cuộc gọi này", 403));
+        }
+
+        return ResponseEntity.ok(BaseResponse.success(call));
     }
 }

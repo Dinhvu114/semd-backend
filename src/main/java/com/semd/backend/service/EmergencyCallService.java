@@ -241,5 +241,17 @@ public class EmergencyCallService {
 
         return updatedCall;
     }
+
+    public List<EmergencyCall> getMyCalls(String reporterPhone) {
+        return callRepository.findByReporterPhoneOrderByCallStartTimeDesc(reporterPhone);
+    }
+
+    public java.util.Optional<EmergencyCall> getCallDetails(Integer id) {
+        return callRepository.findById(id);
+    }
+
+    public java.util.Optional<EmergencyCall> getCallByAudioObjectKey(String objectKey) {
+        return callRepository.findFirstByAudioUrlContaining(objectKey);
+    }
 }
 

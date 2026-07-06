@@ -12,5 +12,11 @@ public interface EmergencyCallRepository extends JpaRepository<EmergencyCall, In
     
     @Query("SELECT c.audioUrl FROM EmergencyCall c WHERE c.audioUrl IS NOT NULL")
     List<String> findAllAudioUrls();
+
+    List<EmergencyCall> findByReporterPhoneOrderByCallStartTimeDesc(String reporterPhone);
+
+    @Query("SELECT c FROM EmergencyCall c WHERE c.audioUrl LIKE %:objectKey%")
+    java.util.Optional<EmergencyCall> findFirstByAudioUrlContaining(@org.springframework.data.repository.query.Param("objectKey") String objectKey);
 }
+
 
