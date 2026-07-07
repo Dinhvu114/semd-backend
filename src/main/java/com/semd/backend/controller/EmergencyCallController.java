@@ -27,6 +27,9 @@ public class EmergencyCallController {
 
     private final EmergencyCallService callService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.callback-key}")
+    private String serverCallbackKey;
+
     public EmergencyCallController(EmergencyCallService callService) {
         this.callService = callService;
     }
@@ -74,7 +77,13 @@ public class EmergencyCallController {
     }
 
     @PostMapping("/callback")
-    public ResponseEntity<Void> receiveAICallback(@RequestBody AICallbackRequest request) {
+    public ResponseEntity<Void> receiveAICallback(
+            @RequestBody AICallbackRequest request,
+            @RequestHeader(value = "X-Callback-Key", required = false) String clientCallbackKey
+    ) {
+        if (clientCallbackKey == null || !clientCallbackKey.equals(serverCallbackKey)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         callService.handleAICallback(
                 request.call_id(),
                 request.transcript(),

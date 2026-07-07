@@ -44,3 +44,6 @@ minio:
   access-key: admin
   secret-key: admin123456
   bucket-name: ems-cad-audio
+
+app:
+  callback-key: ems-cad-callback-secret-key-789012
