@@ -133,6 +133,11 @@
 			<artifactId>minio</artifactId>
 			<version>8.5.10</version>
 		</dependency>
+		<!-- WebSocket -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-websocket</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>

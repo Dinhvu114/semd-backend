@@ -48,40 +48,114 @@ public class DispatchMission {
     @Column(name = "route_geometry", columnDefinition = "geography(LineString, 4326)")
     private LineString routeGeometry;
 
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private String notes;
+
     // Getters & Setters
-    public Integer getId() { return id; }
-    public void setId(Integer id) { this.id = id; }
+    public Integer getId() {
+        return id;
+    }
 
-    public DispatchRequest getRequest() { return request; }
-    public void setRequest(DispatchRequest request) { this.request = request; }
+    public void setId(Integer id) {
+        this.id = id;
+    }
 
-    public DispatchResource getResource() { return resource; }
-    public void setResource(DispatchResource resource) { this.resource = resource; }
+    public DispatchRequest getRequest() {
+        return request;
+    }
 
-    public MedicalHospital getDestination() { return destination; }
-    public void setDestination(MedicalHospital destination) { this.destination = destination; }
+    public void setRequest(DispatchRequest request) {
+        this.request = request;
+    }
 
-    public String getDestinationName() { return destinationName; }
-    public void setDestinationName(String destinationName) { this.destinationName = destinationName; }
+    public DispatchResource getResource() {
+        return resource;
+    }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public void setResource(DispatchResource resource) {
+        this.resource = resource;
+    }
 
-    public LocalDateTime getDispatchedAt() { return dispatchedAt; }
-    public void setDispatchedAt(LocalDateTime dispatchedAt) { this.dispatchedAt = dispatchedAt; }
+    public MedicalHospital getDestination() {
+        return destination;
+    }
 
-    public LocalDateTime getAcceptedAt() { return acceptedAt; }
-    public void setAcceptedAt(LocalDateTime acceptedAt) { this.acceptedAt = acceptedAt; }
+    public void setDestination(MedicalHospital destination) {
+        this.destination = destination;
+    }
 
-    public LocalDateTime getEnRouteAt() { return enRouteAt; }
-    public void setEnRouteAt(LocalDateTime enRouteAt) { this.enRouteAt = enRouteAt; }
+    public String getDestinationName() {
+        return destinationName;
+    }
 
-    public LocalDateTime getOnSceneAt() { return onSceneAt; }
-    public void setOnSceneAt(LocalDateTime onSceneAt) { this.onSceneAt = onSceneAt; }
+    public void setDestinationName(String destinationName) {
+        this.destinationName = destinationName;
+    }
 
-    public LocalDateTime getCompletedAt() { return completedAt; }
-    public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
+    public String getStatus() {
+        return status;
+    }
 
-    public LineString getRouteGeometry() { return routeGeometry; }
-    public void setRouteGeometry(LineString routeGeometry) { this.routeGeometry = routeGeometry; }
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public LocalDateTime getDispatchedAt() {
+        return dispatchedAt;
+    }
+
+    public void setDispatchedAt(LocalDateTime dispatchedAt) {
+        this.dispatchedAt = dispatchedAt;
+    }
+
+    public LocalDateTime getAcceptedAt() {
+        return acceptedAt;
+    }
+
+    public void setAcceptedAt(LocalDateTime acceptedAt) {
+        this.acceptedAt = acceptedAt;
+    }
+
+    public LocalDateTime getEnRouteAt() {
+        return enRouteAt;
+    }
+
+    public void setEnRouteAt(LocalDateTime enRouteAt) {
+        this.enRouteAt = enRouteAt;
+    }
+
+    public LocalDateTime getOnSceneAt() {
+        return onSceneAt;
+    }
+
+    public void setOnSceneAt(LocalDateTime onSceneAt) {
+        this.onSceneAt = onSceneAt;
+    }
+
+    public LocalDateTime getCompletedAt() {
+        return completedAt;
+    }
+
+    public void setCompletedAt(LocalDateTime completedAt) {
+        this.completedAt = completedAt;
+    }
+
+    public LineString getRouteGeometry() {
+        return routeGeometry;
+    }
+
+    public void setRouteGeometry(LineString routeGeometry) {
+        this.routeGeometry = routeGeometry;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
+    }
+
 }
+
+
