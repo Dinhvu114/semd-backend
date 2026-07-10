@@ -48,7 +48,7 @@ public class DispatchMission {
     @Column(name = "route_geometry", columnDefinition = "geography(LineString, 4326)")
     private LineString routeGeometry;
 
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "notes")
     private String notes;
 
     // Getters & Setters
