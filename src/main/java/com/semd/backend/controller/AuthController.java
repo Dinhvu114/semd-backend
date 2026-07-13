@@ -1,8 +1,6 @@
 package com.semd.backend.controller;
 
-import com.semd.backend.dto.AuthResponse;
-import com.semd.backend.dto.LoginRequest;
-import com.semd.backend.dto.TokenRefreshRequest;
+import com.semd.backend.dto.*;
 import com.semd.backend.dto.common.BaseResponse;
 import com.semd.backend.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,5 +43,47 @@ public class AuthController {
     public ResponseEntity<BaseResponse<Void>> logout(@Valid @RequestBody TokenRefreshRequest request) {
         authService.logout(request.refreshToken());
         return ResponseEntity.ok(new BaseResponse<>(200, true, "Đăng xuất thành công", null, null));
+    }
+
+    @PostMapping("/send-otp")
+    @PreAuthorize("permitAll()")
+    @Operation(summary = "Gửi mã OTP xác thực số điện thoại", description = "Mô phỏng gửi mã OTP SMS qua nhà mạng viễn thông. Trả về mã OTP được sinh (để dễ test).")
+    public ResponseEntity<BaseResponse<String>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
+        String otpCode = authService.generateAndSendOtp(request.phoneNumber());
+        return ResponseEntity.ok(BaseResponse.success(otpCode));
+    }
+
+    @PostMapping("/register")
+    @PreAuthorize("permitAll()")
+    @Operation(summary = "Đăng ký tài khoản tự do", description = "Đăng ký tài khoản mới cho người dùng với vai trò mặc định REPORTER.")
+    public ResponseEntity<BaseResponse<Void>> register(@Valid @RequestBody RegisterRequest request) {
+        authService.register(request);
+        return ResponseEntity.ok(new BaseResponse<>(200, true, "Đăng ký tài khoản thành công", null, null));
+    }
+
+    @PostMapping("/forgot-password")
+    @PreAuthorize("permitAll()")
+    @Operation(summary = "Quên mật khẩu", description = "Yêu cầu khôi phục mật khẩu qua Email hoặc Số điện thoại. Hệ thống sẽ sinh và gửi OTP mô phỏng.")
+    public ResponseEntity<BaseResponse<String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        String otpCode = authService.forgotPassword(request);
+        return ResponseEntity.ok(new BaseResponse<>(200, true, "Mã xác thực OTP đặt lại mật khẩu đã được gửi", otpCode, null));
+    }
+
+    @PostMapping("/reset-password")
+    @PreAuthorize("permitAll()")
+    @Operation(summary = "Đặt lại mật khẩu", description = "Sử dụng OTP nhận được để xác nhận đặt lại mật khẩu mới.")
+    public ResponseEntity<BaseResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok(new BaseResponse<>(200, true, "Đặt lại mật khẩu thành công", null, null));
+    }
+
+    @PostMapping("/change-password")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Đổi mật khẩu", description = "Đổi mật khẩu của người dùng hiện đang đăng nhập (yêu cầu token JWT).")
+    public ResponseEntity<BaseResponse<Void>> changePassword(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.semd.backend.security.UserPrincipal principal,
+            @Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(principal.getUsername(), request);
+        return ResponseEntity.ok(new BaseResponse<>(200, true, "Đổi mật khẩu thành công", null, null));
     }
 }

@@ -17,21 +17,27 @@ public class AuthService {
     private final PasswordEncoder encoder;
     private final JwtUtil jwtUtil;
     private final RefreshTokenService refreshTokenService;
+    private final OtpService otpService;
+    private final com.semd.backend.repository.RoleRepository roleRepo;
 
     public AuthService(
             UserRepository userRepo,
             PasswordEncoder encoder,
             JwtUtil jwtUtil,
-            RefreshTokenService refreshTokenService
+            RefreshTokenService refreshTokenService,
+            OtpService otpService,
+            com.semd.backend.repository.RoleRepository roleRepo
     ) {
         this.userRepo = userRepo;
         this.encoder = encoder;
         this.jwtUtil = jwtUtil;
         this.refreshTokenService = refreshTokenService;
+        this.otpService = otpService;
+        this.roleRepo = roleRepo;
     }
 
     public AuthResponse login(LoginRequest request) {
-        User user = userRepo.findByUsername(request.username())
+        User user = userRepo.findByUsernameOrEmailOrPhoneNumber(request.username(), request.username(), request.username())
                 .orElseThrow(() -> new AuthException("Tên đăng nhập hoặc mật khẩu không chính xác"));
 
         if (!encoder.matches(request.password(), user.getPasswordHash())) {
@@ -112,5 +118,82 @@ public class AuthService {
         } catch (Exception e) {
             // Bỏ qua lỗi phân tích token khi đăng xuất
         }
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public String generateAndSendOtp(String phoneNumber) {
+        return otpService.generateAndSendOtp(phoneNumber);
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public void register(com.semd.backend.dto.RegisterRequest request) {
+        // 1. Xác thực OTP
+        if (!otpService.verifyOtp(request.phoneNumber(), request.otpCode())) {
+            throw new IllegalArgumentException("Mã xác thực OTP không chính xác hoặc đã hết hạn");
+        }
+
+        // 2. Kiểm tra trùng lặp thông tin
+        if (userRepo.existsByUsername(request.username())) {
+            throw new IllegalArgumentException("Tên đăng nhập '" + request.username() + "' đã tồn tại");
+        }
+        if (userRepo.existsByEmail(request.email())) {
+            throw new IllegalArgumentException("Email '" + request.email() + "' đã tồn tại");
+        }
+        if (userRepo.existsByPhoneNumber(request.phoneNumber())) {
+            throw new IllegalArgumentException("Số điện thoại '" + request.phoneNumber() + "' đã tồn tại");
+        }
+
+        // 3. Tạo user mới với vai trò mặc định REPORTER
+        User user = new User();
+        user.setUsername(request.username());
+        user.setPasswordHash(encoder.encode(request.password()));
+        user.setFullName(request.fullName());
+        user.setPhoneNumber(request.phoneNumber());
+        user.setEmail(request.email());
+        user.setIsActive(true);
+        user.setCreatedAt(java.time.LocalDateTime.now());
+
+        com.semd.backend.entity.Role reporterRole = roleRepo.findByName("REPORTER")
+                .orElseThrow(() -> new IllegalStateException("Không tìm thấy vai trò REPORTER trên hệ thống."));
+        user.setRoles(java.util.Set.of(reporterRole));
+
+        userRepo.save(user);
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public String forgotPassword(com.semd.backend.dto.ForgotPasswordRequest request) {
+        User user = userRepo.findByUsernameOrEmailOrPhoneNumber(request.identity(), request.identity(), request.identity())
+                .orElseThrow(() -> new com.semd.backend.exception.ResourceNotFoundException(
+                        "Không tìm thấy tài khoản với email/số điện thoại cung cấp: " + request.identity()));
+
+        // Sinh OTP gửi đến số điện thoại đăng ký của user
+        return otpService.generateAndSendOtp(user.getPhoneNumber());
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public void resetPassword(com.semd.backend.dto.ResetPasswordRequest request) {
+        User user = userRepo.findByUsernameOrEmailOrPhoneNumber(request.identity(), request.identity(), request.identity())
+                .orElseThrow(() -> new com.semd.backend.exception.ResourceNotFoundException(
+                        "Không tìm thấy tài khoản với email/số điện thoại cung cấp: " + request.identity()));
+
+        if (!otpService.verifyOtp(user.getPhoneNumber(), request.otpCode())) {
+            throw new IllegalArgumentException("Mã xác thực OTP không chính xác hoặc đã hết hạn");
+        }
+
+        user.setPasswordHash(encoder.encode(request.newPassword()));
+        userRepo.save(user);
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public void changePassword(String username, com.semd.backend.dto.ChangePasswordRequest request) {
+        User user = userRepo.findByUsername(username)
+                .orElseThrow(() -> new com.semd.backend.exception.ResourceNotFoundException("Người dùng không tồn tại"));
+
+        if (!encoder.matches(request.oldPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("Mật khẩu cũ không chính xác");
+        }
+
+        user.setPasswordHash(encoder.encode(request.newPassword()));
+        userRepo.save(user);
     }
 }
