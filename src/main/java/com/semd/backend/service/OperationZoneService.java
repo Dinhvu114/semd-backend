@@ -1,11 +1,11 @@
 package com.semd.backend.service;
 
 import com.semd.backend.dto.CoordinateDto;
-import com.semd.backend.dto.EdgeNodeDto;
-import com.semd.backend.dto.EdgeNodeRequest;
-import com.semd.backend.entity.EdgeNode;
+import com.semd.backend.dto.OperationZoneDto;
+import com.semd.backend.dto.OperationZoneRequest;
+import com.semd.backend.entity.OperationZone;
 import com.semd.backend.exception.ResourceNotFoundException;
-import com.semd.backend.repository.EdgeNodeRepository;
+import com.semd.backend.repository.OperationZoneRepository;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.LinearRing;
@@ -19,66 +19,66 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
-public class EdgeNodeService {
+public class OperationZoneService {
 
-    private final EdgeNodeRepository repository;
+    private final OperationZoneRepository repository;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
-    public EdgeNodeService(EdgeNodeRepository repository) {
+    public OperationZoneService(OperationZoneRepository repository) {
         this.repository = repository;
     }
 
     @Transactional
-    public EdgeNodeDto createEdgeNode(EdgeNodeRequest request) {
-        if (repository.existsByNodeName(request.nodeName())) {
-            throw new IllegalArgumentException("Tên vùng quản lý '" + request.nodeName() + "' đã tồn tại");
+    public OperationZoneDto createOperationZone(OperationZoneRequest request) {
+        if (repository.existsByZoneName(request.zoneName())) {
+            throw new IllegalArgumentException("Tên vùng quản lý '" + request.zoneName() + "' đã tồn tại");
         }
 
-        EdgeNode edgeNode = new EdgeNode();
-        edgeNode.setNodeName(request.nodeName());
-        edgeNode.setCoverageArea(buildPolygon(request.coverageArea()));
-        edgeNode.setIsActive(request.isActive() != null ? request.isActive() : true);
-        edgeNode.setCreatedAt(LocalDateTime.now());
+        OperationZone operationZone = new OperationZone();
+        operationZone.setZoneName(request.zoneName());
+        operationZone.setCoverageArea(buildPolygon(request.coverageArea()));
+        operationZone.setIsActive(request.isActive() != null ? request.isActive() : true);
+        operationZone.setCreatedAt(LocalDateTime.now());
 
-        EdgeNode saved = repository.save(edgeNode);
+        OperationZone saved = repository.save(operationZone);
         return mapToDto(saved);
     }
 
     @Transactional(readOnly = true)
-    public List<EdgeNodeDto> getAllEdgeNodes() {
+    public List<OperationZoneDto> getAllOperationZones() {
         return repository.findAll().stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    public EdgeNodeDto getEdgeNodeById(Integer id) {
-        EdgeNode edgeNode = repository.findById(id)
+    public OperationZoneDto getOperationZoneById(Integer id) {
+        OperationZone operationZone = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vùng quản lý với ID: " + id));
-        return mapToDto(edgeNode);
+        return mapToDto(operationZone);
     }
 
     @Transactional
-    public EdgeNodeDto updateEdgeNode(Integer id, EdgeNodeRequest request) {
-        EdgeNode edgeNode = repository.findById(id)
+    public OperationZoneDto updateOperationZone(Integer id, OperationZoneRequest request) {
+        OperationZone operationZone = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vùng quản lý với ID: " + id));
 
-        if (repository.existsByNodeNameAndIdNot(request.nodeName(), id)) {
-            throw new IllegalArgumentException("Tên vùng quản lý '" + request.nodeName() + "' đã được sử dụng bởi vùng quản lý khác");
+        if (repository.existsByZoneNameAndIdNot(request.zoneName(), id)) {
+            throw new IllegalArgumentException("Tên vùng quản lý '" + request.zoneName() + "' đã được sử dụng bởi vùng quản lý khác");
         }
 
-        edgeNode.setNodeName(request.nodeName());
-        edgeNode.setCoverageArea(buildPolygon(request.coverageArea()));
+        operationZone.setZoneName(request.zoneName());
+        operationZone.setCoverageArea(buildPolygon(request.coverageArea()));
         if (request.isActive() != null) {
-            edgeNode.setIsActive(request.isActive());
+            operationZone.setIsActive(request.isActive());
         }
 
-        EdgeNode updated = repository.save(edgeNode);
+        OperationZone updated = repository.save(operationZone);
         return mapToDto(updated);
     }
 
     @Transactional
-    public void deleteEdgeNode(Integer id) {
+    public void deleteOperationZone(Integer id) {
         if (!repository.existsById(id)) {
             throw new ResourceNotFoundException("Không tìm thấy vùng quản lý với ID: " + id);
         }
@@ -111,20 +111,20 @@ public class EdgeNodeService {
         return geometryFactory.createPolygon(shell, null);
     }
 
-    private EdgeNodeDto mapToDto(EdgeNode edgeNode) {
+    private OperationZoneDto mapToDto(OperationZone operationZone) {
         List<CoordinateDto> coords = null;
-        if (edgeNode.getCoverageArea() != null) {
-            coords = java.util.Arrays.stream(edgeNode.getCoverageArea().getCoordinates())
+        if (operationZone.getCoverageArea() != null) {
+            coords = java.util.Arrays.stream(operationZone.getCoverageArea().getCoordinates())
                     .map(c -> new CoordinateDto(c.x, c.y))
                     .collect(Collectors.toList());
         }
 
-        return new EdgeNodeDto(
-                edgeNode.getId(),
-                edgeNode.getNodeName(),
+        return new OperationZoneDto(
+                operationZone.getId(),
+                operationZone.getZoneName(),
                 coords,
-                edgeNode.getIsActive(),
-                edgeNode.getCreatedAt()
+                operationZone.getIsActive(),
+                operationZone.getCreatedAt()
         );
     }
 }

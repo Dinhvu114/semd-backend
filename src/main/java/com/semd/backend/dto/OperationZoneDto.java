@@ -3,9 +3,9 @@ package com.semd.backend.dto;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public record EdgeNodeDto(
+public record OperationZoneDto(
     Integer id,
-    String nodeName,
+    String zoneName,
     List<CoordinateDto> coverageArea,
     Boolean isActive,
     LocalDateTime createdAt

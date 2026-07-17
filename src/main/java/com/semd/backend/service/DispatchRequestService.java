@@ -38,8 +38,8 @@ public class DispatchRequestService {
         Integer callId = req.getCall() != null ? req.getCall().getId() : null;
         Integer serviceTypeId = req.getServiceType() != null ? req.getServiceType().getId() : null;
         String serviceTypeName = req.getServiceType() != null ? req.getServiceType().getDisplayName() : null;
-        Integer edgeNodeId = req.getEdgeNode() != null ? req.getEdgeNode().getId() : null;
-        String edgeNodeName = req.getEdgeNode() != null ? req.getEdgeNode().getNodeName() : null;
+        Integer zoneId = req.getOperationZone() != null ? req.getOperationZone().getId() : null;
+        String zoneName = req.getOperationZone() != null ? req.getOperationZone().getZoneName() : null;
         Integer dispatcherId = req.getCreatedByDispatcher() != null ? req.getCreatedByDispatcher().getId() : null;
         String dispatcherName = req.getCreatedByDispatcher() != null ? req.getCreatedByDispatcher().getFullName() : null;
 
@@ -55,16 +55,15 @@ public class DispatchRequestService {
                 callId,
                 serviceTypeId,
                 serviceTypeName,
-                edgeNodeId,
-                edgeNodeName,
+                zoneId,
+                zoneName,
                 dispatcherId,
                 dispatcherName,
                 req.getUrgencyLevel(),
                 longitude,
                 latitude,
-                req.getStatus(),
+                req.getStatus() != null ? req.getStatus().name() : null,
                 req.getExtendedRequirements(),
-                req.getIsSyncedToCloud(),
                 req.getCreatedAt()
         );
     }

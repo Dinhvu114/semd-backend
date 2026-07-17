@@ -23,8 +23,8 @@ public class DispatchResource {
     private ServiceType resourceType;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "edge_node_id")
-    private EdgeNode edgeNode;
+    @JoinColumn(name = "zone_id")
+    private OperationZone operationZone;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "provider_id")
@@ -34,8 +34,9 @@ public class DispatchResource {
     @JoinColumn(name = "current_driver_id")
     private User currentDriver;
 
-    @Column(name = "status", length = 20)
-    private String status = "AVAILABLE";
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 30)
+    private DispatchResourceStatus status = DispatchResourceStatus.AVAILABLE;
 
     @Column(name = "current_location", columnDefinition = "geography(Point, 4326)")
     private Point currentLocation;
@@ -57,8 +58,8 @@ public class DispatchResource {
     public ServiceType getResourceType() { return resourceType; }
     public void setResourceType(ServiceType resourceType) { this.resourceType = resourceType; }
 
-    public EdgeNode getEdgeNode() { return edgeNode; }
-    public void setEdgeNode(EdgeNode edgeNode) { this.edgeNode = edgeNode; }
+    public OperationZone getOperationZone() { return operationZone; }
+    public void setOperationZone(OperationZone operationZone) { this.operationZone = operationZone; }
 
     public Provider getProvider() { return provider; }
     public void setProvider(Provider provider) { this.provider = provider; }
@@ -66,8 +67,8 @@ public class DispatchResource {
     public User getCurrentDriver() { return currentDriver; }
     public void setCurrentDriver(User currentDriver) { this.currentDriver = currentDriver; }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public DispatchResourceStatus getStatus() { return status; }
+    public void setStatus(DispatchResourceStatus status) { this.status = status; }
 
     public Point getCurrentLocation() { return currentLocation; }
     public void setCurrentLocation(Point currentLocation) { this.currentLocation = currentLocation; }

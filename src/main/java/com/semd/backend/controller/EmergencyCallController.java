@@ -2,6 +2,7 @@ package com.semd.backend.controller;
 
 import com.semd.backend.entity.EmergencyCall;
 import com.semd.backend.service.EmergencyCallService;
+import com.semd.backend.service.IdempotencyService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,20 +27,26 @@ import com.semd.backend.dto.emergencyCall.*;
 public class EmergencyCallController {
 
     private final EmergencyCallService callService;
+    private final IdempotencyService idempotencyService;
 
     @org.springframework.beans.factory.annotation.Value("${app.callback-key}")
     private String serverCallbackKey;
 
-    public EmergencyCallController(EmergencyCallService callService) {
+    public EmergencyCallController(EmergencyCallService callService, IdempotencyService idempotencyService) {
         this.callService = callService;
+        this.idempotencyService = idempotencyService;
     }
 
     @Operation(summary = "Gọi cấp cứu", description = "Tải lên ghi âm cuộc gọi cấp cứu kèm định vị")
     @PostMapping("/voice")
-    public ResponseEntity<BaseResponse<Void>> createVoiceCall(
+    public ResponseEntity<?> createVoiceCall(
             @RequestBody VoiceCallRequest request,
-            @AuthenticationPrincipal UserPrincipal principal
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
     ) {
+        if (idempotencyKey != null && idempotencyService.isDuplicate(idempotencyKey)) {
+            return idempotencyService.getResponse(idempotencyKey);
+        }
         if (principal == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -54,15 +61,23 @@ public class EmergencyCallController {
                 request.audioObjectKey()
         );
         BaseResponse<Void> response = new BaseResponse<>(202, true, "Thành công", null, null);
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+        ResponseEntity<BaseResponse<Void>> resEntity = ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+        if (idempotencyKey != null) {
+            idempotencyService.save(idempotencyKey, resEntity);
+        }
+        return resEntity;
     }
 
     @Operation(summary = "Gửi định vị", description = "Tải lên định vị")
     @PostMapping("/sos")
-    public ResponseEntity<BaseResponse<Void>> createSosCall(
+    public ResponseEntity<?> createSosCall(
             @RequestBody SosRequest request,
-            @AuthenticationPrincipal UserPrincipal principal
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
     ) {
+        if (idempotencyKey != null && idempotencyService.isDuplicate(idempotencyKey)) {
+            return idempotencyService.getResponse(idempotencyKey);
+        }
         if (principal == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -73,7 +88,11 @@ public class EmergencyCallController {
                 request.longitude()
         );
         BaseResponse<Void> response = new BaseResponse<>(202, true, "Thành công", null, null);
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+        ResponseEntity<BaseResponse<Void>> resEntity = ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+        if (idempotencyKey != null) {
+            idempotencyService.save(idempotencyKey, resEntity);
+        }
+        return resEntity;
     }
 
     @PostMapping("/callback")

@@ -8,8 +8,8 @@ public record DispatchRequestDto(
     Integer callId,
     Integer serviceTypeId,
     String serviceTypeName,
-    Integer edgeNodeId,
-    String edgeNodeName,
+    Integer zoneId,
+    String zoneName,
     Integer createdByDispatcherId,
     String createdByDispatcherName,
     String urgencyLevel,
@@ -17,6 +17,5 @@ public record DispatchRequestDto(
     Double latitude,
     String status,
     Map<String, Object> extendedRequirements,
-    Boolean isSyncedToCloud,
     LocalDateTime createdAt
 ) {}

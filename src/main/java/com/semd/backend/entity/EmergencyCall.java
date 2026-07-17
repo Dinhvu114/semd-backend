@@ -27,8 +27,8 @@ public class EmergencyCall {
     @Column(name = "call_start_time", nullable = false)
     private LocalDateTime callStartTime;
 
-    @Column(name = "call_end_time")
-    private LocalDateTime callEndTime;
+    @Column(name = "call_duration")
+    private Integer callDuration;
 
     @Column(name = "audio_url", length = 512)
     private String audioUrl;
@@ -42,11 +42,16 @@ public class EmergencyCall {
     @Column(name = "ai_confidence_score", precision = 5, scale = 2)
     private BigDecimal aiConfidenceScore;
 
-    @Column(name = "status", length = 20)
-    private String status = "RECEIVED";
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 30)
+    private EmergencyCallStatus status = EmergencyCallStatus.RECEIVED;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "location", columnDefinition = "geography(Point, 4326)")
+    @JsonIgnore
+    private Point location;
 
     // Getters & Setters
     public Integer getId() { return id; }
@@ -64,8 +69,8 @@ public class EmergencyCall {
     public LocalDateTime getCallStartTime() { return callStartTime; }
     public void setCallStartTime(LocalDateTime callStartTime) { this.callStartTime = callStartTime; }
 
-    public LocalDateTime getCallEndTime() { return callEndTime; }
-    public void setCallEndTime(LocalDateTime callEndTime) { this.callEndTime = callEndTime; }
+    public Integer getCallDuration() { return callDuration; }
+    public void setCallDuration(Integer callDuration) { this.callDuration = callDuration; }
 
     public String getAudioUrl() { return audioUrl; }
     public void setAudioUrl(String audioUrl) { this.audioUrl = audioUrl; }
@@ -79,15 +84,11 @@ public class EmergencyCall {
     public BigDecimal getAiConfidenceScore() { return aiConfidenceScore; }
     public void setAiConfidenceScore(BigDecimal aiConfidenceScore) { this.aiConfidenceScore = aiConfidenceScore; }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public EmergencyCallStatus getStatus() { return status; }
+    public void setStatus(EmergencyCallStatus status) { this.status = status; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-
-    @Column(name = "location", columnDefinition = "geography(Point, 4326)")
-    @JsonIgnore
-    private Point location;
 
     public Point getLocation() { return location; }
     public void setLocation(Point location) { this.location = location; }

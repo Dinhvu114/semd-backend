@@ -1,6 +1,8 @@
 package com.semd.backend.dto;
 
+import com.semd.backend.entity.DispatchResourceStatus;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.Map;
 
@@ -10,13 +12,12 @@ public record DispatchResourceRequest(
     String resourceCode,
 
     Integer resourceTypeId,
-    Integer edgeNodeId,
+    Integer zoneId,
     Integer providerId,
     Integer currentDriverId,
 
-    @NotBlank(message = "Trạng thái không được để trống")
-    @Size(max = 20, message = "Trạng thái không vượt quá 20 ký tự")
-    String status,
+    @NotNull(message = "Trạng thái không được để trống")
+    DispatchResourceStatus status,
 
     Double longitude,
     Double latitude,

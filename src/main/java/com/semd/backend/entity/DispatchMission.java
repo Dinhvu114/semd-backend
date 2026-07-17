@@ -12,8 +12,8 @@ public class DispatchMission {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "request_id", nullable = false, unique = true)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "request_id", nullable = false)
     private DispatchRequest request;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -27,8 +27,9 @@ public class DispatchMission {
     @Column(name = "destination_name", length = 255)
     private String destinationName;
 
-    @Column(name = "status", length = 20)
-    private String status = "DISPATCHED";
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 30)
+    private DispatchMissionStatus status = DispatchMissionStatus.CREATED;
 
     @Column(name = "dispatched_at")
     private LocalDateTime dispatchedAt = LocalDateTime.now();
@@ -92,11 +93,11 @@ public class DispatchMission {
         this.destinationName = destinationName;
     }
 
-    public String getStatus() {
+    public DispatchMissionStatus getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(DispatchMissionStatus status) {
         this.status = status;
     }
 
@@ -155,7 +156,6 @@ public class DispatchMission {
     public void setNotes(String notes) {
         this.notes = notes;
     }
-
 }
 
 

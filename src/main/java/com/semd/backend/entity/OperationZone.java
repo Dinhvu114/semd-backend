@@ -5,20 +5,19 @@ import org.locationtech.jts.geom.Polygon;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "edge_nodes")
-public class EdgeNode {
+@Table(name = "operation_zones")
+public class OperationZone {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(name = "node_name", nullable = false, length = 100)
-    private String nodeName;
+    @Column(name = "zone_name", nullable = false, length = 100)
+    private String zoneName;
 
     @Column(name = "coverage_area", columnDefinition = "geometry(Polygon, 4326)")
     @com.fasterxml.jackson.annotation.JsonIgnore
     private Polygon coverageArea;
-
 
     @Column(name = "is_active")
     private Boolean isActive = true;
@@ -30,8 +29,8 @@ public class EdgeNode {
     public Integer getId() { return id; }
     public void setId(Integer id) { this.id = id; }
 
-    public String getNodeName() { return nodeName; }
-    public void setNodeName(String nodeName) { this.nodeName = nodeName; }
+    public String getZoneName() { return zoneName; }
+    public void setZoneName(String zoneName) { this.zoneName = zoneName; }
 
     public Polygon getCoverageArea() { return coverageArea; }
     public void setCoverageArea(Polygon coverageArea) { this.coverageArea = coverageArea; }

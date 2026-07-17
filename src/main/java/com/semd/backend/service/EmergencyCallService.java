@@ -1,8 +1,7 @@
 package com.semd.backend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.semd.backend.entity.AuditLog;
-import com.semd.backend.entity.EmergencyCall;
+import com.semd.backend.entity.*;
 import com.semd.backend.repository.AuditLogRepository;
 import com.semd.backend.repository.EmergencyCallRepository;
 import org.locationtech.jts.geom.Coordinate;
@@ -12,13 +11,9 @@ import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
-import com.semd.backend.entity.DispatchRequest;
-import com.semd.backend.entity.ServiceType;
-import com.semd.backend.entity.EdgeNode;
 import com.semd.backend.repository.DispatchRequestRepository;
 import com.semd.backend.repository.ServiceTypeRepository;
-import com.semd.backend.repository.EdgeNodeRepository;
+import com.semd.backend.repository.OperationZoneRepository;
 import java.util.List;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -35,7 +30,7 @@ public class EmergencyCallService {
     private final SimpMessagingTemplate messagingTemplate;
     private final DispatchRequestRepository dispatchRequestRepository;
     private final ServiceTypeRepository serviceTypeRepository;
-    private final EdgeNodeRepository edgeNodeRepository;
+    private final OperationZoneRepository operationZoneRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
@@ -46,7 +41,7 @@ public class EmergencyCallService {
                                 SimpMessagingTemplate messagingTemplate,
                                 DispatchRequestRepository dispatchRequestRepository,
                                 ServiceTypeRepository serviceTypeRepository,
-                                EdgeNodeRepository edgeNodeRepository) {
+                                OperationZoneRepository operationZoneRepository) {
         this.callRepository = callRepository;
         this.fileStorageService = fileStorageService;
         this.auditLogRepository = auditLogRepository;
@@ -54,7 +49,7 @@ public class EmergencyCallService {
         this.messagingTemplate = messagingTemplate;
         this.dispatchRequestRepository = dispatchRequestRepository;
         this.serviceTypeRepository = serviceTypeRepository;
-        this.edgeNodeRepository = edgeNodeRepository;
+        this.operationZoneRepository = operationZoneRepository;
     }
 
     public EmergencyCall createEmergencySosCall(String reporterPhone, String reporterName, Double latitude, Double longitude) {
@@ -62,7 +57,7 @@ public class EmergencyCallService {
         call.setReporterPhone(reporterPhone);
         call.setReporterName(reporterName);
         call.setCallStartTime(LocalDateTime.now());
-        call.setStatus("SOS");
+        call.setStatus(EmergencyCallStatus.CONFIRMED);
         
         if (longitude != null && latitude != null) {
             call.setLocation(geometryFactory.createPoint(new Coordinate(longitude, latitude)));
@@ -73,13 +68,13 @@ public class EmergencyCallService {
         saveAuditLog(savedCall, longitude, latitude);
 
         // Tự động tìm Vùng biên chứa tọa độ cuộc gọi
-        EdgeNode edgeNode = null;
+        OperationZone operationZone = null;
         if (longitude != null && latitude != null) {
-            edgeNode = edgeNodeRepository.findContainingNode(longitude, latitude).orElse(null);
+            operationZone = operationZoneRepository.findContainingZone(longitude, latitude).orElse(null);
         }
         // Fallback về vùng hoạt động đầu tiên hoạt động nếu không khớp tọa độ cụ thể
-        if (edgeNode == null) {
-            edgeNode = edgeNodeRepository.findAll().stream().filter(EdgeNode::getIsActive).findFirst().orElse(null);
+        if (operationZone == null) {
+            operationZone = operationZoneRepository.findAll().stream().filter(OperationZone::getIsActive).findFirst().orElse(null);
         }
 
         // Lấy loại hình dịch vụ cơ bản mặc định (BLS)
@@ -89,10 +84,10 @@ public class EmergencyCallService {
         DispatchRequest request = new DispatchRequest();
         request.setCall(savedCall);
         request.setServiceType(serviceType);
-        request.setEdgeNode(edgeNode);
+        request.setOperationZone(operationZone);
         request.setUrgencyLevel("CRITICAL"); // Đặt mặc định mức khẩn cấp CRITICAL cho SOS nhanh
         request.setTargetLocation(savedCall.getLocation());
-        request.setStatus("PENDING");
+        request.setStatus(DispatchRequestStatus.PENDING);
         dispatchRequestRepository.save(request);
 
         // Phát tán WebSocket tới điều phối viên
@@ -116,7 +111,7 @@ public class EmergencyCallService {
         call.setReporterName(reporterName);
         call.setCallStartTime(LocalDateTime.now());
         call.setAudioUrl(audioUrl);
-        call.setStatus("RECEIVED");
+        call.setStatus(EmergencyCallStatus.RECEIVED);
         
         if (longitude != null && latitude != null) {
             call.setLocation(geometryFactory.createPoint(new Coordinate(longitude, latitude)));
@@ -157,7 +152,7 @@ public class EmergencyCallService {
         Map<String, Object> data = new HashMap<>();
         data.put("reporterPhone", call.getReporterPhone());
         data.put("reporterName", call.getReporterName());
-        data.put("status", call.getStatus());
+        data.put("status", call.getStatus().name());
         data.put("audioUrl", call.getAudioUrl());
         data.put("longitude", longitude);
         data.put("latitude", latitude);
@@ -196,7 +191,7 @@ public class EmergencyCallService {
         call.setAiTranscript(transcript);
         call.setAiUrgencyPrediction(urgency);
         call.setAiConfidenceScore(BigDecimal.valueOf(confidence));
-        call.setStatus("ANALYZED");
+        call.setStatus(EmergencyCallStatus.AI_ANALYZED);
 
         EmergencyCall updatedCall = callRepository.save(call);
 
@@ -207,26 +202,26 @@ public class EmergencyCallService {
         }
         ServiceType serviceType = serviceTypeRepository.findByTypeCode(serviceTypeCode).orElse(null);
 
-        // 4. Tìm Vùng biên quản lý (EdgeNode) của cuộc gọi cấp cứu
+        // 4. Tìm Vùng biên quản lý (OperationZone) của cuộc gọi cấp cứu
         Double longitude = call.getLongitude();
         Double latitude = call.getLatitude();
-        EdgeNode edgeNode = null;
+        OperationZone operationZone = null;
         if (longitude != null && latitude != null) {
-            edgeNode = edgeNodeRepository.findContainingNode(longitude, latitude).orElse(null);
+            operationZone = operationZoneRepository.findContainingZone(longitude, latitude).orElse(null);
         }
         // Fallback về vùng hoạt động đầu tiên hoạt động nếu không khớp
-        if (edgeNode == null) {
-            edgeNode = edgeNodeRepository.findAll().stream().filter(EdgeNode::getIsActive).findFirst().orElse(null);
+        if (operationZone == null) {
+            operationZone = operationZoneRepository.findAll().stream().filter(OperationZone::getIsActive).findFirst().orElse(null);
         }
 
         // 5. Tự động tạo yêu cầu điều phối (DispatchRequest) liên kết với cuộc gọi cấp cứu
         DispatchRequest request = new DispatchRequest();
         request.setCall(updatedCall);
         request.setServiceType(serviceType);
-        request.setEdgeNode(edgeNode);
+        request.setOperationZone(operationZone);
         request.setUrgencyLevel(urgency);
         request.setTargetLocation(updatedCall.getLocation());
-        request.setStatus("PENDING");
+        request.setStatus(DispatchRequestStatus.PENDING);
         
         // Lưu danh sách triệu chứng trích xuất từ AI vào extendedRequirements
         if (symptoms != null && !symptoms.isEmpty()) {

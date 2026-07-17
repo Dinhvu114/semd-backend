@@ -84,7 +84,7 @@ public class DispatchResourceService {
     }
 
     @Transactional
-    public DispatchResourceDto updateResourceStatus(Integer id, String status) {
+    public DispatchResourceDto updateResourceStatus(Integer id, DispatchResourceStatus status) {
         DispatchResource resource = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe cứu thương với ID: " + id));
 
@@ -114,14 +114,14 @@ public class DispatchResourceService {
             resource.setResourceType(null);
         }
 
-        if (request.edgeNodeId() != null) {
-            EdgeNode edgeNode = entityManager.find(EdgeNode.class, request.edgeNodeId());
-            if (edgeNode == null) {
-                throw new ResourceNotFoundException("Không tìm thấy vùng quản lý với ID: " + request.edgeNodeId());
+        if (request.zoneId() != null) {
+            OperationZone operationZone = entityManager.find(OperationZone.class, request.zoneId());
+            if (operationZone == null) {
+                throw new ResourceNotFoundException("Không tìm thấy vùng quản lý với ID: " + request.zoneId());
             }
-            resource.setEdgeNode(edgeNode);
+            resource.setOperationZone(operationZone);
         } else {
-            resource.setEdgeNode(null);
+            resource.setOperationZone(null);
         }
 
         if (request.providerId() != null) {
@@ -156,11 +156,9 @@ public class DispatchResourceService {
         Integer typeId = resource.getResourceType() != null ? resource.getResourceType().getId() : null;
         String typeName = resource.getResourceType() != null ? resource.getResourceType().getDisplayName() : null;
 
-        Integer nodeId = resource.getEdgeNode() != null ? resource.getEdgeNode().getId() : null;
-        String nodeName = resource.getEdgeNode() != null ? resource.getEdgeNode().getNodeName() : null;
+        Integer zoneId = resource.getOperationZone() != null ? resource.getOperationZone().getId() : null;
+        String zoneName = resource.getOperationZone() != null ? resource.getOperationZone().getZoneName() : null;
 
-        // Note: owner_user_id (User id) is mapped as Integer/int4 in Postgres (due to migrations), 
-        // so it corresponds to Integer id in our User.java.
         Integer providerId = resource.getProvider() != null ? (resource.getProvider().getId() != null ? resource.getProvider().getId().intValue() : null) : null;
         String providerName = resource.getProvider() != null ? resource.getProvider().getProviderName() : null;
 
@@ -179,13 +177,13 @@ public class DispatchResourceService {
                 resource.getResourceCode(),
                 typeId,
                 typeName,
-                nodeId,
-                nodeName,
+                zoneId,
+                zoneName,
                 providerId,
                 providerName,
                 driverId,
                 driverName,
-                resource.getStatus(),
+                resource.getStatus() != null ? resource.getStatus().name() : null,
                 longitude,
                 latitude,
                 resource.getExtendedAttributes(),
