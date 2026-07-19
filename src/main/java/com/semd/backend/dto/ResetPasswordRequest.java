@@ -15,6 +15,6 @@ public record ResetPasswordRequest(
 
     @NotBlank(message = "Mật khẩu mới không được để trống")
     @Size(max = 100, message = "Mật khẩu mới không vượt quá 100 ký tự")
-    @Schema(example = "654321", description = "Mật khẩu mới (chỉ bao gồm chữ số)")
+    @Schema(example = "654321", description = "Mật khẩu mới của tài khoản")
     String newPassword
 ) {}

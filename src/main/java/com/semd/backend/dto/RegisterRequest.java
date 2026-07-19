@@ -13,7 +13,7 @@ public record RegisterRequest(
 
     @NotBlank(message = "Mật khẩu không được để trống")
     @Size(max = 100, message = "Mật khẩu không vượt quá 100 ký tự")
-    @Schema(example = "123456", description = "Mật khẩu (chỉ bao gồm chữ số)")
+    @Schema(example = "123456", description = "Mật khẩu của tài khoản")
     String password,
 
     @NotBlank(message = "Họ và tên không được để trống")
