@@ -40,4 +40,15 @@ public class DispatchMissionController {
         }
         return resEntity;
     }
+    // THÊM MỚI ENDPOINT
+    @PatchMapping("/{missionId}/status")
+    @Operation(
+            summary = "Driver cập nhật trạng thái nhiệm vụ",
+            description = "Trạng thái hợp lệ theo thứ tự: ACCEPTED → ON_SCENE → COMPLETED"
+    )
+    public ResponseEntity<DispatchMissionResponse> updateStatus(
+            @PathVariable Integer missionId,
+            @RequestParam String status) {
+        return ResponseEntity.ok(missionService.updateStatus(missionId, status));
+    }
 }

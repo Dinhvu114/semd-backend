@@ -48,6 +48,9 @@ public class DispatchResource {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt = LocalDateTime.now();
 
+    @Column(name = "current_driver_id")
+    private Integer currentDriverId;
+
     // Getters & Setters
     public Integer getId() { return id; }
     public void setId(Integer id) { this.id = id; }
@@ -78,4 +81,7 @@ public class DispatchResource {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public Integer getCurrentDriverId() { return currentDriverId; }
+    public void setCurrentDriverId(Integer currentDriverId) { this.currentDriverId = currentDriverId; }
 }
