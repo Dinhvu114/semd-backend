@@ -130,3 +130,25 @@ application-local.yml
 - [ ] Không có `System.out.println` thừa
 - [ ] Đã test API trên Swagger UI
 
+## 9. Hướng dẫn chạy Redis bằng Docker (Để đăng nhập & lưu Session)
+
+Hệ thống sử dụng **Redis** để quản lý session và token đăng nhập thời gian thực. Thành viên trong nhóm có thể khởi chạy nhanh Redis bằng Docker theo hướng dẫn sau:
+
+1. **Yêu cầu:** Máy tính đã cài đặt và đang chạy **Docker Desktop**.
+2. **Tải (Pull) Redis Image mới nhất:**
+   ```bash
+   docker pull redis:latest
+   ```
+3. **Khởi chạy Container Redis:**
+   Chạy lệnh sau để tạo và chạy container Redis ở cổng mặc định `6379` không có mật khẩu (tương thích với cấu hình mặc định của Spring Boot):
+   ```bash
+   docker run --name semd-redis -p 6379:6379 -d redis:latest
+   ```
+4. **Kiểm tra trạng thái Container:**
+   ```bash
+   docker ps
+   ```
+   Nếu thấy container `semd-redis` đang ở trạng thái `Up`, Spring Boot sẽ tự động nhận diện và kết nối thành công khi khởi động.
+5. **Dừng/Chạy lại Redis khi cần thiết:**
+   * Dừng container: `docker stop semd-redis`
+   * Chạy lại container: `docker start semd-redis`
