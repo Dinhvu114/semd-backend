@@ -10,6 +10,9 @@ import com.semd.backend.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -63,6 +66,31 @@ public class UserService {
         return repository.findAll().stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<UserDto> search(String keyword, Boolean isActive, String role, Pageable pageable) {
+        Specification<User> specification = (root, query, cb) -> cb.conjunction();
+        if (keyword != null && !keyword.isBlank()) {
+            String pattern = "%" + keyword.trim().toLowerCase() + "%";
+            specification = specification.and((root, query, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("username")), pattern),
+                    cb.like(cb.lower(root.get("fullName")), pattern),
+                    cb.like(cb.lower(root.get("phoneNumber")), pattern),
+                    cb.like(cb.lower(root.get("email")), pattern)
+            ));
+        }
+        if (isActive != null) {
+            specification = specification.and((root, query, cb) -> cb.equal(root.get("isActive"), isActive));
+        }
+        if (role != null && !role.isBlank()) {
+            String normalizedRole = role.trim().toUpperCase();
+            specification = specification.and((root, query, cb) -> {
+                query.distinct(true);
+                return cb.equal(cb.upper(root.join("roles").get("name")), normalizedRole);
+            });
+        }
+        return repository.findAll(specification, pageable).map(this::mapToDto);
     }
 
     @Transactional(readOnly = true)

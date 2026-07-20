@@ -3,11 +3,17 @@ package com.semd.backend.controller;
 import com.semd.backend.dto.DispatchRequestDto;
 import com.semd.backend.dto.common.BaseResponse;
 import com.semd.backend.service.DispatchRequestService;
+import com.semd.backend.entity.DispatchRequestStatus;
+import com.semd.backend.dto.common.Metadata;
+import com.semd.backend.dto.common.PageRequestDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
+import org.springdoc.core.annotations.ParameterObject;
 
 import java.util.List;
 
@@ -26,9 +32,16 @@ public class DispatchRequestController {
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     @Operation(summary = "Lấy danh sách tất cả yêu cầu điều phối", 
             description = "Trả về danh sách toàn bộ các yêu cầu điều phối sắp xếp theo thời gian tạo giảm dần")
-    public ResponseEntity<BaseResponse<List<DispatchRequestDto>>> getAllRequests() {
-        List<DispatchRequestDto> result = requestService.getAllRequests();
-        return ResponseEntity.ok(BaseResponse.success(result));
+    public ResponseEntity<BaseResponse<List<DispatchRequestDto>>> getAllRequests(
+            @RequestParam(required = false) DispatchRequestStatus status,
+            @RequestParam(required = false) String urgencyLevel,
+            @RequestParam(required = false) Integer serviceTypeId,
+            @RequestParam(required = false) Integer edgeNodeId,
+            @ParameterObject @ModelAttribute PageRequestDto pagination) {
+        Page<DispatchRequestDto> result = requestService.search(
+                status, urgencyLevel, serviceTypeId, edgeNodeId,
+                pagination.toPageable(Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))));
+        return ResponseEntity.ok(BaseResponse.success(result.getContent(), Metadata.from(result)));
     }
 
     @GetMapping("/{id}")
@@ -39,4 +52,5 @@ public class DispatchRequestController {
         DispatchRequestDto result = requestService.getRequestById(id);
         return ResponseEntity.ok(BaseResponse.success(result));
     }
+
 }

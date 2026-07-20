@@ -12,6 +12,9 @@ import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -49,10 +52,35 @@ public class DispatchResourceService {
     }
 
     @Transactional(readOnly = true)
-    public List<DispatchResourceDto> getAllResources() {
-        return repository.findAll().stream()
-                .map(this::mapToDto)
-                .collect(Collectors.toList());
+    public Page<DispatchResourceDto> search(
+            String keyword,
+            DispatchResourceStatus status,
+            Integer serviceTypeId,
+            Integer providerId,
+            Integer operationZoneId,
+            Pageable pageable) {
+        Specification<DispatchResource> specification = (root, query, cb) -> cb.conjunction();
+        if (keyword != null && !keyword.isBlank()) {
+            String pattern = "%" + keyword.trim().toLowerCase() + "%";
+            specification = specification.and((root, query, cb) ->
+                    cb.like(cb.lower(root.get("resourceCode")), pattern));
+        }
+        if (status != null) {
+            specification = specification.and((root, query, cb) -> cb.equal(root.get("status"), status));
+        }
+        if (serviceTypeId != null) {
+            specification = specification.and((root, query, cb) ->
+                    cb.equal(root.get("resourceType").get("id"), serviceTypeId));
+        }
+        if (providerId != null) {
+            specification = specification.and((root, query, cb) ->
+                    cb.equal(root.get("provider").get("id"), providerId));
+        }
+        if (operationZoneId != null) {
+            specification = specification.and((root, query, cb) ->
+                    cb.equal(root.get("operationZone").get("id"), operationZoneId));
+        }
+        return repository.findAll(specification, pageable).map(this::mapToDto);
     }
 
     @Transactional(readOnly = true)
