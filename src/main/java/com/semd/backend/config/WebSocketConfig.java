@@ -21,8 +21,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // Endpoint kết nối WebSocket
-        registry.addEndpoint("/ws-emergency")
-                .setAllowedOriginPatterns("*")
-                .withSockJS();
+        registry.addEndpoint("/ws")
+                .setAllowedOriginPatterns("*");
+                // .withSockJS();
     }
 }
