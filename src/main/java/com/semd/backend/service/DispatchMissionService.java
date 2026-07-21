@@ -89,8 +89,11 @@ public class DispatchMissionService {
         );
 
         // 8. Gửi WebSocket cho Driver
-        Integer driverId = resource.getCurrentDriverId();
-        if (driverId != null) {
+        User currentDriver = resource.getCurrentDriver();
+
+        if (currentDriver != null) {
+            Integer driverId = currentDriver.getId();
+
             messagingTemplate.convertAndSend(
                     "/topic/driver/" + driverId,
                     (Object) Map.of(
