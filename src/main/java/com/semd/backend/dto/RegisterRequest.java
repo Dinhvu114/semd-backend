@@ -31,7 +31,7 @@ public record RegisterRequest(
     @Schema(example = "reporter01@gmail.com", description = "Địa chỉ email")
     String email,
 
-    @NotBlank(message = "Mã xác thực OTP không được để trống")
-    @Schema(example = "123456", description = "Mã xác thực OTP")
-    String otpCode
+    @NotBlank(message = "Token xác minh số điện thoại không được để trống")
+    @Schema(description = "Token một lần nhận từ API /auth/verify-otp")
+    String verificationToken
 ) {}

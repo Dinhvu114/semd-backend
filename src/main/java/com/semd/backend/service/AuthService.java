@@ -6,6 +6,8 @@ import org.springframework.stereotype.Service;
 import com.semd.backend.dto.AuthResponse;
 import com.semd.backend.dto.LoginRequest;
 import com.semd.backend.dto.TokenRefreshRequest;
+import com.semd.backend.dto.OtpVerificationResponse;
+import com.semd.backend.dto.VerifyOtpRequest;
 import com.semd.backend.entity.User;
 import com.semd.backend.exception.AuthException;
 import com.semd.backend.repository.UserRepository;
@@ -120,19 +122,17 @@ public class AuthService {
         }
     }
 
-    @org.springframework.transaction.annotation.Transactional
     public String generateAndSendOtp(String phoneNumber) {
         return otpService.generateAndSendOtp(phoneNumber);
     }
 
+    public OtpVerificationResponse verifyRegistrationOtp(VerifyOtpRequest request) {
+        return otpService.verifyAndIssueRegistrationToken(request.phoneNumber(), request.otpCode());
+    }
+
     @org.springframework.transaction.annotation.Transactional
     public void register(com.semd.backend.dto.RegisterRequest request) {
-        // 1. Xác thực OTP
-        if (!otpService.verifyOtp(request.phoneNumber(), request.otpCode())) {
-            throw new IllegalArgumentException("Mã xác thực OTP không chính xác hoặc đã hết hạn");
-        }
-
-        // 2. Kiểm tra trùng lặp thông tin
+        // 1. Kiểm tra trùng lặp trước khi tiêu thụ verification token một lần.
         if (userRepo.existsByUsername(request.username())) {
             throw new IllegalArgumentException("Tên đăng nhập '" + request.username() + "' đã tồn tại");
         }
@@ -141,6 +141,11 @@ public class AuthService {
         }
         if (userRepo.existsByPhoneNumber(request.phoneNumber())) {
             throw new IllegalArgumentException("Số điện thoại '" + request.phoneNumber() + "' đã tồn tại");
+        }
+
+        // 2. Token chỉ được cấp sau khi OTP hợp lệ, ràng buộc với số điện thoại và dùng một lần.
+        if (!otpService.consumeRegistrationToken(request.phoneNumber(), request.verificationToken())) {
+            throw new IllegalArgumentException("Token xác minh số điện thoại không hợp lệ, đã hết hạn hoặc đã được sử dụng");
         }
 
         // 3. Tạo user mới với vai trò mặc định REPORTER
@@ -160,7 +165,6 @@ public class AuthService {
         userRepo.save(user);
     }
 
-    @org.springframework.transaction.annotation.Transactional
     public String forgotPassword(com.semd.backend.dto.ForgotPasswordRequest request) {
         User user = userRepo.findByUsernameOrEmailOrPhoneNumber(request.identity(), request.identity(), request.identity())
                 .orElseThrow(() -> new com.semd.backend.exception.ResourceNotFoundException(

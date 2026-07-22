@@ -138,8 +138,8 @@ class AuthServiceTest {
 
     @Test
     void testRegister_Success() {
-        com.semd.backend.dto.RegisterRequest request = new com.semd.backend.dto.RegisterRequest("newuser", "123456", "New User", "0987654321", "new@gmail.com", "123456");
-        when(otpService.verifyOtp("0987654321", "123456")).thenReturn(true);
+        com.semd.backend.dto.RegisterRequest request = new com.semd.backend.dto.RegisterRequest("newuser", "123456", "New User", "0987654321", "new@gmail.com", "verification-token");
+        when(otpService.consumeRegistrationToken("0987654321", "verification-token")).thenReturn(true);
         when(userRepo.existsByUsername("newuser")).thenReturn(false);
         when(userRepo.existsByEmail("new@gmail.com")).thenReturn(false);
         when(userRepo.existsByPhoneNumber("0987654321")).thenReturn(false);
@@ -155,11 +155,11 @@ class AuthServiceTest {
 
     @Test
     void testRegister_InvalidOtp() {
-        com.semd.backend.dto.RegisterRequest request = new com.semd.backend.dto.RegisterRequest("newuser", "123456", "New User", "0987654321", "new@gmail.com", "999999");
-        when(otpService.verifyOtp("0987654321", "999999")).thenReturn(false);
+        com.semd.backend.dto.RegisterRequest request = new com.semd.backend.dto.RegisterRequest("newuser", "123456", "New User", "0987654321", "new@gmail.com", "invalid-token");
+        when(otpService.consumeRegistrationToken("0987654321", "invalid-token")).thenReturn(false);
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> authService.register(request));
-        assertEquals("Mã xác thực OTP không chính xác hoặc đã hết hạn", exception.getMessage());
+        assertEquals("Token xác minh số điện thoại không hợp lệ, đã hết hạn hoặc đã được sử dụng", exception.getMessage());
     }
 
     @Test

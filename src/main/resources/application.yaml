@@ -47,3 +47,19 @@ minio:
 
 app:
   callback-key: ems-cad-callback-secret-key-789012
+  otp:
+    # mock: trả OTP trong response để FE/demo sử dụng; sms: gọi HTTP SMS provider và ẩn OTP
+    delivery-mode: ${OTP_DELIVERY_MODE:mock}
+    ttl-seconds: ${OTP_TTL_SECONDS:300}
+    resend-cooldown-seconds: ${OTP_RESEND_COOLDOWN_SECONDS:60}
+    registration-token-ttl-seconds: ${OTP_REGISTRATION_TOKEN_TTL_SECONDS:600}
+    max-verification-attempts: ${OTP_MAX_VERIFICATION_ATTEMPTS:5}
+    default-country-code: ${OTP_DEFAULT_COUNTRY_CODE:+84}
+    hash-secret: ${OTP_HASH_SECRET:${jwt.secret}}
+  sms:
+    # Adapter mặc định gửi JSON {to, sender, message} và dùng Authorization: Bearer <token>.
+    # Khi chọn nhà cung cấp cụ thể, ánh xạ payload/header trong HttpSmsOtpDeliveryService.
+    endpoint: ${SMS_ENDPOINT:}
+    api-token: ${SMS_API_TOKEN:}
+    sender: ${SMS_SENDER:SEMD}
+    message-template: ${SMS_MESSAGE_TEMPLATE:Ma xac thuc SEMD cua ban la %s. Ma co hieu luc trong 5 phut.}

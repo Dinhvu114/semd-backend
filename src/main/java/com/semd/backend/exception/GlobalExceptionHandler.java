@@ -46,6 +46,12 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(OtpDeliveryException.class)
+    public ResponseEntity<BaseResponse<Void>> handleOtpDeliveryException(OtpDeliveryException ex) {
+        BaseResponse<Void> response = BaseResponse.fail(ex.getMessage(), 503);
+        return new ResponseEntity<>(response, HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<BaseResponse<Void>> handleGeneralException(Exception ex) {
         ex.printStackTrace(); // Log the stack trace for debugging

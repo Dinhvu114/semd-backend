@@ -47,15 +47,31 @@ public class AuthController {
 
     @PostMapping("/send-otp")
     @PreAuthorize("permitAll()")
-    @Operation(summary = "Gửi mã OTP xác thực số điện thoại", description = "Mô phỏng gửi mã OTP SMS qua nhà mạng viễn thông. Trả về mã OTP được sinh (để dễ test).")
+    @Operation(summary = "Gửi mã OTP xác thực số điện thoại", description = "Gửi OTP qua kênh cấu hình. Chế độ mock trả mã trong data; chế độ sms luôn trả data = null.")
     public ResponseEntity<BaseResponse<String>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
         String otpCode = authService.generateAndSendOtp(request.phoneNumber());
-        return ResponseEntity.ok(BaseResponse.success(otpCode));
+        return ResponseEntity.ok(new BaseResponse<>(
+                200,
+                true,
+                otpCode != null ? "Mã OTP thử nghiệm đã được tạo" : "Mã OTP đã được gửi",
+                otpCode,
+                null
+        ));
+    }
+
+    @PostMapping("/verify-otp")
+    @PreAuthorize("permitAll()")
+    @Operation(summary = "Xác minh OTP", description = "Xác minh OTP và trả token đăng ký ngắn hạn, dùng một lần.")
+    public ResponseEntity<BaseResponse<OtpVerificationResponse>> verifyOtp(
+            @Valid @RequestBody VerifyOtpRequest request
+    ) {
+        OtpVerificationResponse response = authService.verifyRegistrationOtp(request);
+        return ResponseEntity.ok(BaseResponse.success(response));
     }
 
     @PostMapping("/register")
     @PreAuthorize("permitAll()")
-    @Operation(summary = "Đăng ký tài khoản tự do", description = "Đăng ký tài khoản mới cho người dùng với vai trò mặc định REPORTER.")
+    @Operation(summary = "Đăng ký tài khoản tự do", description = "Đăng ký REPORTER bằng verificationToken nhận từ API /auth/verify-otp.")
     public ResponseEntity<BaseResponse<Void>> register(@Valid @RequestBody RegisterRequest request) {
         authService.register(request);
         return ResponseEntity.ok(new BaseResponse<>(200, true, "Đăng ký tài khoản thành công", null, null));

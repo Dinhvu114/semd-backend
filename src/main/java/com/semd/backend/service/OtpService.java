@@ -1,117 +1,265 @@
 package com.semd.backend.service;
 
+import com.semd.backend.dto.OtpVerificationResponse;
 import com.semd.backend.entity.IntegrationLog;
 import com.semd.backend.entity.IntegrationPartner;
+import com.semd.backend.exception.OtpDeliveryException;
 import com.semd.backend.repository.IntegrationLogRepository;
 import com.semd.backend.repository.IntegrationPartnerRepository;
+import com.semd.backend.service.otp.OtpDeliveryService;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.Base64;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class OtpService {
 
+    private static final String OTP_KEY_PREFIX = "otp:code:";
+    private static final String COOLDOWN_KEY_PREFIX = "otp:cooldown:";
+    private static final String ATTEMPTS_KEY_PREFIX = "otp:attempts:";
+    private static final String REGISTRATION_TOKEN_KEY_PREFIX = "otp:registration-token:";
+    private static final DefaultRedisScript<Long> CONSUME_REGISTRATION_TOKEN_SCRIPT =
+            new DefaultRedisScript<>(
+                    "if redis.call('GET', KEYS[1]) == ARGV[1] " +
+                            "then return redis.call('DEL', KEYS[1]) else return 0 end",
+                    Long.class
+            );
+
     private final IntegrationPartnerRepository partnerRepo;
     private final IntegrationLogRepository logRepo;
+    private final StringRedisTemplate redisTemplate;
+    private final OtpDeliveryService deliveryService;
+    private final SecureRandom secureRandom = new SecureRandom();
+    private final Duration otpTtl;
+    private final Duration resendCooldown;
+    private final Duration registrationTokenTtl;
+    private final int maxAttempts;
+    private final String defaultCountryCode;
+    private final String hashSecret;
 
-    // Cache lưu trữ mã OTP trong bộ nhớ tạm thời
-    private final Map<String, OtpData> otpCache = new ConcurrentHashMap<>();
-    private final Random random = new Random();
-
-    public OtpService(IntegrationPartnerRepository partnerRepo, IntegrationLogRepository logRepo) {
+    public OtpService(
+            IntegrationPartnerRepository partnerRepo,
+            IntegrationLogRepository logRepo,
+            StringRedisTemplate redisTemplate,
+            OtpDeliveryService deliveryService,
+            @Value("${app.otp.ttl-seconds:300}") long otpTtlSeconds,
+            @Value("${app.otp.resend-cooldown-seconds:60}") long resendCooldownSeconds,
+            @Value("${app.otp.registration-token-ttl-seconds:600}") long registrationTokenTtlSeconds,
+            @Value("${app.otp.max-verification-attempts:5}") int maxAttempts,
+            @Value("${app.otp.default-country-code:+84}") String defaultCountryCode,
+            @Value("${app.otp.hash-secret:${jwt.secret}}") String hashSecret
+    ) {
         this.partnerRepo = partnerRepo;
         this.logRepo = logRepo;
+        this.redisTemplate = redisTemplate;
+        this.deliveryService = deliveryService;
+        this.otpTtl = Duration.ofSeconds(otpTtlSeconds);
+        this.resendCooldown = Duration.ofSeconds(resendCooldownSeconds);
+        this.registrationTokenTtl = Duration.ofSeconds(registrationTokenTtlSeconds);
+        this.maxAttempts = maxAttempts;
+        this.defaultCountryCode = defaultCountryCode;
+        this.hashSecret = hashSecret;
     }
 
-    private record OtpData(String code, LocalDateTime expiresAt) {
-        public boolean isExpired() {
-            return LocalDateTime.now().isAfter(expiresAt);
-        }
-    }
+    public String generateAndSendOtp(String rawPhoneNumber) {
+        String phoneNumber = normalizePhoneNumber(rawPhoneNumber);
+        String cooldownKey = COOLDOWN_KEY_PREFIX + phoneNumber;
+        Boolean acquired = redisTemplate.opsForValue()
+                .setIfAbsent(cooldownKey, "1", resendCooldown);
 
-    /**
-     * Sinh và "gửi" mã OTP đến số điện thoại (mô phỏng).
-     *
-     * @param phoneNumber Số điện thoại nhận OTP
-     * @return Mã OTP đã được sinh ra (thuận tiện cho việc test/mock)
-     */
-    @Transactional
-    public String generateAndSendOtp(String phoneNumber) {
-        // Sinh ngẫu nhiên mã 6 chữ số
-        String otpCode = String.valueOf(100000 + random.nextInt(900000));
-        
-        // OTP có hiệu lực trong 5 phút
-        otpCache.put(phoneNumber, new OtpData(otpCode, LocalDateTime.now().plusMinutes(5)));
-
-        // Tìm đối tác viễn thông hoạt động
-        List<IntegrationPartner> telcos = partnerRepo.findByPartnerTypeAndIsActiveTrue("TELCO");
-        IntegrationPartner activeTelco = telcos.isEmpty() ? null : telcos.get(0);
-
-        // Ghi nhật ký cuộc gọi tích hợp (Outbound)
-        IntegrationLog outboundLog = new IntegrationLog();
-        outboundLog.setPartner(activeTelco);
-        outboundLog.setDirection("OUTBOUND");
-        outboundLog.setEventType("SEND_OTP");
-        outboundLog.setPayload(Map.of(
-                "phoneNumber", phoneNumber,
-                "otpCode", otpCode,
-                "message", "Mã xác thực OTP gửi từ đối tác viễn thông",
-                "providerUsed", activeTelco != null ? activeTelco.getPartnerName() : "MOCK_FALLBACK_PROVIDER"
-        ));
-        outboundLog.setStatusCode(200);
-        logRepo.save(outboundLog);
-
-        return otpCode;
-    }
-
-    /**
-     * Xác thực mã OTP.
-     *
-     * @param phoneNumber Số điện thoại cần xác thực
-     * @param code Mã OTP do người dùng nhập
-     * @return true nếu mã chính xác và còn hạn, ngược lại false
-     */
-    @Transactional
-    public boolean verifyOtp(String phoneNumber, String code) {
-        // Cho phép mã cố định "123456" cho tất cả các mục đích chạy mock/testing
-        if ("123456".equals(code)) {
-            logVerificationResult(phoneNumber, code, true);
-            return true;
+        if (!Boolean.TRUE.equals(acquired)) {
+            throw new IllegalArgumentException("Vui lòng chờ trước khi yêu cầu gửi lại mã OTP");
         }
 
-        OtpData otpData = otpCache.get(phoneNumber);
-        if (otpData == null || otpData.isExpired() || !otpData.code().equals(code)) {
-            logVerificationResult(phoneNumber, code, false);
+        String otpCode = "%06d".formatted(secureRandom.nextInt(1_000_000));
+        String otpKey = OTP_KEY_PREFIX + phoneNumber;
+        String attemptsKey = ATTEMPTS_KEY_PREFIX + phoneNumber;
+
+        redisTemplate.opsForValue().set(otpKey, hashOtp(phoneNumber, otpCode), otpTtl);
+        redisTemplate.opsForValue().set(attemptsKey, String.valueOf(maxAttempts), otpTtl);
+
+        try {
+            deliveryService.send(phoneNumber, otpCode);
+            writeSendLog(phoneNumber, true, null);
+        } catch (RuntimeException exception) {
+            redisTemplate.delete(List.of(otpKey, attemptsKey, cooldownKey));
+            writeSendLog(phoneNumber, false, exception.getMessage());
+            if (exception instanceof OtpDeliveryException otpDeliveryException) {
+                throw otpDeliveryException;
+            }
+            throw new OtpDeliveryException("Không thể gửi mã OTP", exception);
+        }
+
+        return deliveryService.exposesCodeToClient() ? otpCode : null;
+    }
+
+    @Transactional
+    public boolean verifyOtp(String rawPhoneNumber, String code) {
+        String phoneNumber = normalizePhoneNumber(rawPhoneNumber);
+        String otpKey = OTP_KEY_PREFIX + phoneNumber;
+        String attemptsKey = ATTEMPTS_KEY_PREFIX + phoneNumber;
+        String storedHash = redisTemplate.opsForValue().get(otpKey);
+
+        if (storedHash == null || code == null) {
+            logVerificationResult(phoneNumber, false, "OTP_NOT_FOUND_OR_EXPIRED");
             return false;
         }
 
-        // Xác thực thành công -> xóa mã
-        otpCache.remove(phoneNumber);
-        logVerificationResult(phoneNumber, code, true);
+        String remainingValue = redisTemplate.opsForValue().get(attemptsKey);
+        int remainingAttempts = remainingValue == null ? 0 : Integer.parseInt(remainingValue);
+        if (remainingAttempts <= 0) {
+            redisTemplate.delete(List.of(otpKey, attemptsKey));
+            logVerificationResult(phoneNumber, false, "TOO_MANY_ATTEMPTS");
+            return false;
+        }
+
+        boolean matches = MessageDigest.isEqual(
+                storedHash.getBytes(StandardCharsets.UTF_8),
+                hashOtp(phoneNumber, code).getBytes(StandardCharsets.UTF_8)
+        );
+
+        if (!matches) {
+            Long remaining = redisTemplate.opsForValue().decrement(attemptsKey);
+            if (remaining != null && remaining <= 0) {
+                redisTemplate.delete(List.of(otpKey, attemptsKey));
+            }
+            logVerificationResult(phoneNumber, false, "OTP_MISMATCH");
+            return false;
+        }
+
+        redisTemplate.delete(List.of(otpKey, attemptsKey, COOLDOWN_KEY_PREFIX + phoneNumber));
+        logVerificationResult(phoneNumber, true, "VERIFIED");
         return true;
     }
 
-    private void logVerificationResult(String phoneNumber, String code, boolean isSuccess) {
-        List<IntegrationPartner> telcos = partnerRepo.findByPartnerTypeAndIsActiveTrue("TELCO");
-        IntegrationPartner activeTelco = telcos.isEmpty() ? null : telcos.get(0);
+    public OtpVerificationResponse verifyAndIssueRegistrationToken(String phoneNumber, String otpCode) {
+        if (!verifyOtp(phoneNumber, otpCode)) {
+            throw new IllegalArgumentException("Mã xác thực OTP không chính xác hoặc đã hết hạn");
+        }
 
-        // Ghi nhật ký tiếp nhận xác thực (Inbound)
-        IntegrationLog inboundLog = new IntegrationLog();
-        inboundLog.setPartner(activeTelco);
-        inboundLog.setDirection("INBOUND");
-        inboundLog.setEventType("VERIFY_OTP");
-        inboundLog.setPayload(Map.of(
-                "phoneNumber", phoneNumber,
-                "otpCodeSent", code,
-                "status", isSuccess ? "SUCCESS" : "FAILED",
-                "reason", isSuccess ? "Mã khớp" : "Mã không hợp lệ hoặc đã hết hạn"
+        String normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+        byte[] tokenBytes = new byte[32];
+        secureRandom.nextBytes(tokenBytes);
+        String verificationToken = Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
+
+        redisTemplate.opsForValue().set(
+                registrationTokenKey(verificationToken),
+                normalizedPhoneNumber,
+                registrationTokenTtl
+        );
+
+        return new OtpVerificationResponse(
+                verificationToken,
+                registrationTokenTtl.toSeconds()
+        );
+    }
+
+    public boolean consumeRegistrationToken(String phoneNumber, String verificationToken) {
+        if (verificationToken == null || verificationToken.isBlank()) {
+            return false;
+        }
+
+        String normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+        Long consumed = redisTemplate.execute(
+                CONSUME_REGISTRATION_TOKEN_SCRIPT,
+                List.of(registrationTokenKey(verificationToken)),
+                normalizedPhoneNumber
+        );
+        return Long.valueOf(1L).equals(consumed);
+    }
+
+    private String normalizePhoneNumber(String rawPhoneNumber) {
+        if (rawPhoneNumber == null || rawPhoneNumber.isBlank()) {
+            throw new IllegalArgumentException("Số điện thoại không được để trống");
+        }
+
+        String normalized = rawPhoneNumber.trim().replaceAll("[\\s().-]", "");
+        if (normalized.startsWith("0")) {
+            normalized = defaultCountryCode + normalized.substring(1);
+        } else if (!normalized.startsWith("+")) {
+            normalized = "+" + normalized;
+        }
+
+        if (!normalized.matches("\\+[1-9]\\d{7,14}")) {
+            throw new IllegalArgumentException("Số điện thoại không đúng định dạng quốc tế E.164");
+        }
+        return normalized;
+    }
+
+    private String hashOtp(String phoneNumber, String otpCode) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] value = digest.digest((hashSecret + ":" + phoneNumber + ":" + otpCode)
+                    .getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(value);
+        } catch (Exception exception) {
+            throw new IllegalStateException("Không thể bảo vệ mã OTP", exception);
+        }
+    }
+
+    private String registrationTokenKey(String verificationToken) {
+        return REGISTRATION_TOKEN_KEY_PREFIX + hashValue(verificationToken);
+    }
+
+    private String hashValue(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(
+                    (hashSecret + ":" + value).getBytes(StandardCharsets.UTF_8)
+            ));
+        } catch (Exception exception) {
+            throw new IllegalStateException("Không thể bảo vệ token xác minh", exception);
+        }
+    }
+
+    private void writeSendLog(String phoneNumber, boolean success, String reason) {
+        IntegrationLog log = new IntegrationLog();
+        log.setPartner(findActiveTelco());
+        log.setDirection("OUTBOUND");
+        log.setEventType("SEND_OTP");
+        log.setPayload(Map.of(
+                "phoneNumber", maskPhoneNumber(phoneNumber),
+                "providerUsed", deliveryService.providerName(),
+                "status", success ? "SUCCESS" : "FAILED",
+                "reason", reason == null ? "" : reason
         ));
-        inboundLog.setStatusCode(isSuccess ? 200 : 400);
-        logRepo.save(inboundLog);
+        log.setStatusCode(success ? 200 : 503);
+        logRepo.save(log);
+    }
+
+    private void logVerificationResult(String phoneNumber, boolean success, String reason) {
+        IntegrationLog log = new IntegrationLog();
+        log.setPartner(findActiveTelco());
+        log.setDirection("INBOUND");
+        log.setEventType("VERIFY_OTP");
+        log.setPayload(Map.of(
+                "phoneNumber", maskPhoneNumber(phoneNumber),
+                "status", success ? "SUCCESS" : "FAILED",
+                "reason", reason
+        ));
+        log.setStatusCode(success ? 200 : 400);
+        logRepo.save(log);
+    }
+
+    private IntegrationPartner findActiveTelco() {
+        List<IntegrationPartner> telcos = partnerRepo.findByPartnerTypeAndIsActiveTrue("TELCO");
+        return telcos.isEmpty() ? null : telcos.get(0);
+    }
+
+    private String maskPhoneNumber(String phoneNumber) {
+        return phoneNumber.length() <= 4
+                ? "***"
+                : "***" + phoneNumber.substring(phoneNumber.length() - 4);
     }
 }
