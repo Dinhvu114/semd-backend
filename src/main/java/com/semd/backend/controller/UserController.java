@@ -4,6 +4,8 @@ import com.semd.backend.dto.UserDto;
 import com.semd.backend.dto.UserRequest;
 import com.semd.backend.dto.common.BaseResponse;
 import com.semd.backend.service.UserService;
+import com.semd.backend.dto.common.Metadata;
+import com.semd.backend.dto.common.PageRequestDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -11,6 +13,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
+import org.springdoc.core.annotations.ParameterObject;
 
 import java.util.List;
 
@@ -36,9 +41,15 @@ public class UserController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN')")
     @Operation(summary = "Lấy danh sách tất cả người dùng", description = "Trả về danh sách toàn bộ người dùng trong hệ thống")
-    public ResponseEntity<BaseResponse<List<UserDto>>> getAllUsers() {
-        List<UserDto> result = service.getAllUsers();
-        return ResponseEntity.ok(BaseResponse.success(result));
+    public ResponseEntity<BaseResponse<List<UserDto>>> getAllUsers(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false) String role,
+            @ParameterObject @ModelAttribute PageRequestDto pagination) {
+        Page<UserDto> result = service.search(
+                keyword, isActive, role,
+                pagination.toPageable(Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))));
+        return ResponseEntity.ok(BaseResponse.success(result.getContent(), Metadata.from(result)));
     }
 
     @GetMapping("/me")
@@ -78,4 +89,5 @@ public class UserController {
         service.deleteUser(id);
         return ResponseEntity.ok(BaseResponse.success(null));
     }
+
 }

@@ -1,6 +1,14 @@
 package com.semd.backend.dto.emergencyCall;
 
-    public record VoiceCallRequest(
-        String audioObjectKey,
-        LocationDto location
-    ) {}
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
+public record VoiceCallRequest(
+    @NotBlank(message = "Khóa tệp ghi âm (audioObjectKey) không được để trống")
+    String audioObjectKey,
+
+    @NotNull(message = "Vị trí (location) không được để trống")
+    @Valid
+    LocationDto location
+) {}
