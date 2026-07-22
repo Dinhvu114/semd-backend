@@ -16,6 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.semd.backend.security.UserPrincipal;
 import com.semd.backend.dto.common.BaseResponse;
 import org.springframework.security.access.prepost.PreAuthorize;
+import jakarta.validation.Valid;
 import java.util.List;
 import com.semd.backend.dto.emergencyCall.*;
 
@@ -40,7 +41,7 @@ public class EmergencyCallController {
     @Operation(summary = "Gọi cấp cứu", description = "Tải lên ghi âm cuộc gọi cấp cứu kèm định vị")
     @PostMapping("/voice")
     public ResponseEntity<?> createVoiceCall(
-            @RequestBody VoiceCallRequest request,
+            @Valid @RequestBody VoiceCallRequest request,
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
     ) {
@@ -71,7 +72,7 @@ public class EmergencyCallController {
     @Operation(summary = "Gửi định vị", description = "Tải lên định vị")
     @PostMapping("/sos")
     public ResponseEntity<?> createSosCall(
-            @RequestBody SosRequest request,
+            @Valid @RequestBody SosRequest request,
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
     ) {

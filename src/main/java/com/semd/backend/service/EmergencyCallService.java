@@ -11,6 +11,7 @@ import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.semd.backend.repository.DispatchRequestRepository;
 import com.semd.backend.repository.ServiceTypeRepository;
 import com.semd.backend.repository.OperationZoneRepository;
@@ -52,6 +53,7 @@ public class EmergencyCallService {
         this.operationZoneRepository = operationZoneRepository;
     }
 
+    @Transactional
     public EmergencyCall createEmergencySosCall(String reporterPhone, String reporterName, Double latitude, Double longitude) {
         EmergencyCall call = new EmergencyCall();
         call.setReporterPhone(reporterPhone);
@@ -101,6 +103,7 @@ public class EmergencyCallService {
     /**
      * Nhận yêu cầu cuộc gọi thoại khẩn cấp kèm định vị từ người dân.
      */
+    @Transactional
     public EmergencyCall createEmergencyVoiceCall(String reporterPhone, String reporterName, Double latitude, Double longitude, String audioObjectKey) {
         // 1. Lấy URL công khai của file từ object key
         String audioUrl = fileStorageService.getPublicUrl(audioObjectKey);
