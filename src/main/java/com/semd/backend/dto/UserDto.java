@@ -9,6 +9,7 @@ public record UserDto(
     String phoneNumber,
     String email,
     java.util.Set<String> roles,
+    Integer providerId,
     Boolean isActive,
     LocalDateTime createdAt
 ) {}

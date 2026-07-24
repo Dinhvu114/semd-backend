@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -37,6 +38,13 @@ public class GlobalExceptionHandler {
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining("; "));
         BaseResponse<Void> response = BaseResponse.fail(errorMessage, 400);
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<BaseResponse<Void>> handleUnreadableRequest(HttpMessageNotReadableException ex) {
+        BaseResponse<Void> response = BaseResponse.fail(
+                "Dữ liệu request không hợp lệ. Vui lòng kiểm tra kiểu dữ liệu và giá trị role", 400);
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 

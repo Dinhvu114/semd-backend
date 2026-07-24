@@ -2,11 +2,15 @@ package com.semd.backend.service;
 
 import com.semd.backend.dto.UserDto;
 import com.semd.backend.dto.UserRequest;
+import com.semd.backend.dto.AdminCreateUserRequest;
+import com.semd.backend.entity.Provider;
+import com.semd.backend.entity.RoleCode;
 import com.semd.backend.entity.User;
 import com.semd.backend.exception.ResourceNotFoundException;
 import com.semd.backend.entity.Role;
 import com.semd.backend.repository.RoleRepository;
 import com.semd.backend.repository.UserRepository;
+import com.semd.backend.repository.ProviderRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,11 +29,67 @@ public class UserService {
     private final UserRepository repository;
     private final PasswordEncoder passwordEncoder;
     private final RoleRepository roleRepository;
+    private final ProviderRepository providerRepository;
 
-    public UserService(UserRepository repository, PasswordEncoder passwordEncoder, RoleRepository roleRepository) {
+    public UserService(UserRepository repository, PasswordEncoder passwordEncoder, RoleRepository roleRepository,
+                       ProviderRepository providerRepository) {
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
         this.roleRepository = roleRepository;
+        this.providerRepository = providerRepository;
+    }
+
+    @Transactional
+    public UserDto createInternalUser(AdminCreateUserRequest request) {
+        Set<RoleCode> creatableRoles = Set.of(
+                RoleCode.DISPATCHER,
+                RoleCode.PROVIDER_ADMIN,
+                RoleCode.DRIVER);
+        if (!creatableRoles.contains(request.role())) {
+            throw new IllegalArgumentException(
+                    "Admin chỉ được tạo tài khoản DISPATCHER, PROVIDER_ADMIN hoặc DRIVER");
+        }
+
+        if (request.role() != RoleCode.DISPATCHER && request.providerId() == null) {
+            throw new IllegalArgumentException(request.role() + " bắt buộc phải thuộc một Provider");
+        }
+
+        Provider provider = null;
+        if (request.providerId() != null) {
+            provider = providerRepository.findById(request.providerId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Không tìm thấy Provider với ID: " + request.providerId()));
+        }
+
+        validateUniqueIdentity(request.username(), request.email(), request.phone());
+
+        Role role = roleRepository.findByName(request.role().name())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Không tìm thấy vai trò: " + request.role().name()));
+
+        User user = new User();
+        user.setUsername(request.username());
+        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.setFullName(request.fullName());
+        user.setPhoneNumber(request.phone());
+        user.setEmail(request.email());
+        user.setRoles(Set.of(role));
+        user.setProvider(provider);
+        user.setIsActive(true);
+        user.setCreatedAt(LocalDateTime.now());
+        return mapToDto(repository.save(user));
+    }
+
+    private void validateUniqueIdentity(String username, String email, String phone) {
+        if (repository.existsByUsername(username)) {
+            throw new IllegalArgumentException("Tên đăng nhập '" + username + "' đã tồn tại");
+        }
+        if (email != null && !email.isBlank() && repository.existsByEmail(email)) {
+            throw new IllegalArgumentException("Email '" + email + "' đã tồn tại");
+        }
+        if (repository.existsByPhoneNumber(phone)) {
+            throw new IllegalArgumentException("Số điện thoại '" + phone + "' đã tồn tại");
+        }
     }
 
     @Transactional
@@ -148,6 +208,7 @@ public class UserService {
                 user.getPhoneNumber(),
                 user.getEmail(),
                 roleNames,
+                user.getProvider() != null ? user.getProvider().getId() : null,
                 user.getIsActive(),
                 user.getCreatedAt()
         );
