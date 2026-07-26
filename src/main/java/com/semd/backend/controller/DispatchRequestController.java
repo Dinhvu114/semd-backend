@@ -15,10 +15,13 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springdoc.core.annotations.ParameterObject;
+import com.semd.backend.security.UserPrincipal;
+import jakarta.validation.Valid;
 
 import java.util.List;
 import java.util.Map;
@@ -96,8 +99,9 @@ public class DispatchRequestController {
                description = "Dispatcher xác nhận đây là ca thật, chuyển trạng thái sang CONFIRMED")
     public ResponseEntity<BaseResponse<Map<String, String>>> confirm(
             @PathVariable Integer id,
-            @RequestBody ConfirmDispatchRequest request) {
-        return ResponseEntity.ok(BaseResponse.success(requestService.confirm(id, request)));
+            @Valid @RequestBody ConfirmDispatchRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(BaseResponse.success(requestService.confirm(id, request, principal.getId())));
     }
 
     // ──────────────────────────────────────────────
@@ -109,8 +113,9 @@ public class DispatchRequestController {
                description = "Dispatcher từ chối yêu cầu, chuyển trạng thái sang REJECTED")
     public ResponseEntity<BaseResponse<Map<String, String>>> reject(
             @PathVariable Integer id,
-            @RequestBody RejectDispatchRequest request) {
-        return ResponseEntity.ok(BaseResponse.success(requestService.reject(id, request)));
+            @Valid @RequestBody RejectDispatchRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(BaseResponse.success(requestService.reject(id, request, principal.getId())));
     }
 
     // ──────────────────────────────────────────────
@@ -122,7 +127,7 @@ public class DispatchRequestController {
                description = "Dispatcher override mức độ phân loại của AI (ví dụ: RED, ORANGE, YELLOW, GREEN)")
     public ResponseEntity<BaseResponse<Map<String, String>>> updateSeverity(
             @PathVariable Integer id,
-            @RequestBody SeverityUpdateRequest request) {
+            @Valid @RequestBody SeverityUpdateRequest request) {
         return ResponseEntity.ok(BaseResponse.success(requestService.updateSeverity(id, request)));
     }
 

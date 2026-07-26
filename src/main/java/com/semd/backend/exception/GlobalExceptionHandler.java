@@ -54,6 +54,12 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(InvalidStateTransitionException.class)
+    public ResponseEntity<BaseResponse<Void>> handleInvalidStateTransition(InvalidStateTransitionException ex) {
+        BaseResponse<Void> response = BaseResponse.fail(ex.getMessage(), 409);
+        return new ResponseEntity<>(response, HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(OtpDeliveryException.class)
     public ResponseEntity<BaseResponse<Void>> handleOtpDeliveryException(OtpDeliveryException ex) {
         BaseResponse<Void> response = BaseResponse.fail(ex.getMessage(), 503);

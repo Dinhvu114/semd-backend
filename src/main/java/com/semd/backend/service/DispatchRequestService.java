@@ -7,6 +7,7 @@ import com.semd.backend.dto.request.SeverityUpdateRequest;
 import com.semd.backend.dto.response.*;
 import com.semd.backend.entity.*;
 import com.semd.backend.exception.ResourceNotFoundException;
+import com.semd.backend.exception.InvalidStateTransitionException;
 import com.semd.backend.repository.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -163,19 +164,12 @@ public class DispatchRequestService {
     // 4. POST /dispatch-requests/{id}/confirm
     // ──────────────────────────────────────────────
     @Transactional
-    public Map<String, String> confirm(Integer id, ConfirmDispatchRequest req) {
-        DispatchRequest request = findById(id);
+    public Map<String, String> confirm(Integer id, ConfirmDispatchRequest req, Integer dispatcherId) {
+        DispatchRequest request = findByIdForUpdate(id);
+        ensurePendingForReview(request);
+        User dispatcher = findDispatcher(dispatcherId);
 
-        if (request.getStatus() == DispatchRequestStatus.REJECTED ||
-            request.getStatus() == DispatchRequestStatus.CANCELLED ||
-            request.getStatus() == DispatchRequestStatus.COMPLETED) {
-            throw new IllegalStateException("Không thể xác nhận yêu cầu ở trạng thái: " + request.getStatus());
-        }
-
-        if (req.dispatcherId() != null) {
-            userRepository.findById(req.dispatcherId())
-                    .ifPresent(request::setConfirmedBy);
-        }
+        request.setConfirmedBy(dispatcher);
         request.setConfirmedAt(LocalDateTime.now());
         request.setReviewNote(req.note());
         request.setStatus(DispatchRequestStatus.CONFIRMED);
@@ -189,14 +183,13 @@ public class DispatchRequestService {
     // 5. POST /dispatch-requests/{id}/reject
     // ──────────────────────────────────────────────
     @Transactional
-    public Map<String, String> reject(Integer id, RejectDispatchRequest req) {
-        DispatchRequest request = findById(id);
+    public Map<String, String> reject(Integer id, RejectDispatchRequest req, Integer dispatcherId) {
+        DispatchRequest request = findByIdForUpdate(id);
+        ensurePendingForReview(request);
+        User dispatcher = findDispatcher(dispatcherId);
 
-        if (request.getStatus() == DispatchRequestStatus.DISPATCHED ||
-            request.getStatus() == DispatchRequestStatus.COMPLETED) {
-            throw new IllegalStateException("Không thể từ chối yêu cầu ở trạng thái: " + request.getStatus());
-        }
-
+        request.setConfirmedBy(dispatcher);
+        request.setConfirmedAt(LocalDateTime.now());
         request.setReviewNote(req.reason());
         request.setStatus(DispatchRequestStatus.REJECTED);
         requestRepository.save(request);
@@ -210,11 +203,17 @@ public class DispatchRequestService {
     // ──────────────────────────────────────────────
     @Transactional
     public Map<String, String> updateSeverity(Integer id, SeverityUpdateRequest req) {
-        DispatchRequest request = findById(id);
-        request.setTriageLevel(req.severity());
-        request.setUrgencyLevel(req.severity());
+        DispatchRequest request = findByIdForUpdate(id);
+        if (request.getStatus() != DispatchRequestStatus.PENDING
+                && request.getStatus() != DispatchRequestStatus.CONFIRMED) {
+            throw new InvalidStateTransitionException(
+                    "Không thể cập nhật mức độ nghiêm trọng ở trạng thái: " + request.getStatus());
+        }
+        String severity = req.severity().trim().toUpperCase(Locale.ROOT);
+        request.setTriageLevel(severity);
+        request.setUrgencyLevel(severity);
         requestRepository.save(request);
-        return Map.of("triageLevel", req.severity());
+        return Map.of("triageLevel", severity);
     }
 
     // ──────────────────────────────────────────────
@@ -456,6 +455,27 @@ public class DispatchRequestService {
     private DispatchRequest findById(Integer id) {
         return requestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dispatch_request id: " + id));
+    }
+
+    private DispatchRequest findByIdForUpdate(Integer id) {
+        return requestRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dispatch_request id: " + id));
+    }
+
+    private User findDispatcher(Integer dispatcherId) {
+        if (dispatcherId == null) {
+            throw new ResourceNotFoundException("Không xác định được điều phối viên đang đăng nhập");
+        }
+        return userRepository.findById(dispatcherId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy điều phối viên id: " + dispatcherId));
+    }
+
+    private void ensurePendingForReview(DispatchRequest request) {
+        if (request.getStatus() != DispatchRequestStatus.PENDING) {
+            throw new InvalidStateTransitionException(
+                    "Yêu cầu đã được xử lý, trạng thái hiện tại: " + request.getStatus());
+        }
     }
 
     private void broadcastUpdate(DispatchRequest request) {

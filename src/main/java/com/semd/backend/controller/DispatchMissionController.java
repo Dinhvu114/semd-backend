@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -24,6 +25,7 @@ public class DispatchMissionController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     @Operation(summary = "Tạo lệnh điều xe mới",
             description = "Tạo mission + tự động gửi thông báo WebSocket cho Dispatcher")
     public ResponseEntity<?> create(
@@ -42,6 +44,7 @@ public class DispatchMissionController {
     }
     // THÊM MỚI ENDPOINT
     @PatchMapping("/{missionId}/status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DRIVER')")
     @Operation(
             summary = "Driver cập nhật trạng thái nhiệm vụ",
             description = "Trạng thái hợp lệ theo thứ tự: ACCEPTED → ON_SCENE → COMPLETED"

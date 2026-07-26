@@ -3,6 +3,8 @@ package com.semd.backend.service;
 import com.semd.backend.dto.request.CreateDispatchMissionRequest;
 import com.semd.backend.dto.response.DispatchMissionResponse;
 import com.semd.backend.entity.*;
+import com.semd.backend.exception.InvalidStateTransitionException;
+import com.semd.backend.exception.ResourceNotFoundException;
 import com.semd.backend.repository.DispatchMissionRepository;
 import com.semd.backend.repository.DispatchRequestRepository;
 import com.semd.backend.repository.DispatchResourceRepository;
@@ -41,12 +43,25 @@ public class DispatchMissionService {
     public DispatchMissionResponse create(CreateDispatchMissionRequest req) {
 
         // 1. Kiểm tra request tồn tại
-        DispatchRequest request = requestRepository.findById(req.getRequestId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy dispatch_request id: " + req.getRequestId()));
+        DispatchRequest request = requestRepository.findByIdForUpdate(req.getRequestId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy dispatch_request id: " + req.getRequestId()));
+
+        if (request.getStatus() != DispatchRequestStatus.CONFIRMED) {
+            throw new InvalidStateTransitionException(
+                    "Chỉ được điều xe cho yêu cầu đã được xác nhận. Trạng thái hiện tại: "
+                            + request.getStatus());
+        }
 
         // 2. Kiểm tra xe tồn tại
-        DispatchResource resource = resourceRepository.findById(req.getResourceId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy xe id: " + req.getResourceId()));
+        DispatchResource resource = resourceRepository.findByIdForUpdate(req.getResourceId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy xe id: " + req.getResourceId()));
+
+        if (resource.getStatus() != DispatchResourceStatus.AVAILABLE) {
+            throw new InvalidStateTransitionException(
+                    "Xe không sẵn sàng để điều phối. Trạng thái hiện tại: " + resource.getStatus());
+        }
 
         // 3. Đặt trạng thái xe sang DISPATCHED
         resource.setStatus(DispatchResourceStatus.DISPATCHED);
