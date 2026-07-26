@@ -1,9 +1,17 @@
+jwt:
+  secret: your-256-bit-secret-key-here-change-in-production-THAT-IS-EXTREMELY-L0NG-AND-EASY-TO-REMEMBER-WHATSOVEVER-ANYWAY-TH1S-1S-THE-SECRET-KEY-THE-QUICK-BROWN-FOX-JUMPS-OVER-THE-LAZY-DOG
+  access-token-expiration: 900000
+  refresh-token-expiration: 604800000 
+
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/semd_db
     username: postgres
     password: 123456
     driver-class-name: org.postgresql.Driver
+  redis:
+      host: localhost
+      port: 6379
 
   jpa:
     hibernate:
@@ -27,3 +35,28 @@ springdoc:
 
 server:
   port: 8080
+
+# ==========================================
+# MinIO Configuration
+# ==========================================
+minio:
+  endpoint: http://localhost:9000
+  access-key: admin
+  secret-key: admin123456
+  bucket-name: ems-cad-audio
+
+app:
+  callback-key: ems-cad-callback-secret-key-789012
+
+ # cấu hình OSRM
+  osrm:
+    base-url: ${OSRM_BASE_URL:http://localhost:5000}
+    profile: driving
+    connect-timeout-ms: 2000
+    read-timeout-ms: 5000
+    max-retries: 2
+  simulation:
+    scheduler-pool-size: 4
+    default-tick-interval-ms: 1000
+    location-log-interval-ms: 5000
+    stale-session-threshold-seconds: 30
