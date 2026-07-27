@@ -127,12 +127,12 @@ public class DispatchRequestController {
     }
 
     // ──────────────────────────────────────────────
-    // 7. POST /dispatch-requests/{id}/recommend
+    // 7. GET /dispatch-requests/{id}/recommendations
     // ──────────────────────────────────────────────
-    @PostMapping("/{id}/recommend")
+    @GetMapping("/{id}/recommendations")
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
-    @Operation(summary = "Đề xuất xe cứu thương phù hợp",
-               description = "Tính khoảng cách Haversine từ tọa độ yêu cầu đến các xe AVAILABLE, trả về Top 5 gần nhất")
+    @Operation(summary = "Gợi ý top 3 xe cứu thương",
+               description = "Lọc xe hợp lệ và xếp hạng theo ETA, khoảng cách, năng lực, độ mới vị trí và rủi ro")
     public ResponseEntity<BaseResponse<List<RecommendationItemDto>>> recommend(@PathVariable Integer id) {
         return ResponseEntity.ok(BaseResponse.success(requestService.recommend(id)));
     }

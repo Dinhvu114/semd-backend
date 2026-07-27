@@ -21,10 +21,20 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 @Service
 public class DispatchRequestService {
+
+    private static final double ETA_WEIGHT = 0.35;
+    private static final double DISTANCE_WEIGHT = 0.25;
+    private static final double CAPABILITY_WEIGHT = 0.25;
+    private static final double FRESHNESS_WEIGHT = 0.10;
+    private static final double RISK_WEIGHT = 0.05;
+    private static final double AVERAGE_SPEED_KMH = 40.0;
+    private static final long LOCATION_STALE_SECONDS = 600;
+    private static final int RECOMMENDATION_LIMIT = 3;
 
     private final DispatchRequestRepository requestRepository;
     private final DispatchMissionRepository missionRepository;
@@ -228,33 +238,195 @@ public class DispatchRequestService {
             throw new IllegalStateException("Yêu cầu #" + id + " chưa có tọa độ để đề xuất xe.");
         }
 
-        double lat = request.getTargetLocation().getY();
-        double lon = request.getTargetLocation().getX();
-
-        List<DispatchResource> available = resourceRepository.findAll()
+        LocalDateTime calculatedAt = LocalDateTime.now();
+        List<CandidateScore> candidates = resourceRepository
+                .findAllByStatus(DispatchResourceStatus.AVAILABLE)
                 .stream()
-                .filter(r -> r.getStatus() == DispatchResourceStatus.AVAILABLE)
-                .filter(r -> r.getCurrentLocation() != null)
-                .collect(Collectors.toList());
+                .filter(resource -> isEligible(resource, request, calculatedAt))
+                .map(resource -> buildCandidate(resource, request, calculatedAt))
+                .toList();
 
-        return available.stream()
-                .map(r -> {
-                    double rLat = r.getCurrentLocation().getY();
-                    double rLon = r.getCurrentLocation().getX();
-                    double distKm = haversine(lat, lon, rLat, rLon);
-                    double score = Math.max(0, 100 - distKm * 10);
-                    long eta = (long) (distKm / 40.0 * 3600); // 40km/h trung bình
-                    List<String> reason = new ArrayList<>();
-                    if (distKm < 2) reason.add("Gần nhất");
-                    if (r.getResourceType() != null) reason.add(r.getResourceType().getDisplayName());
-                    return new RecommendationItemDto(
-                            r.getId(), r.getResourceCode(), Math.round(score * 10.0) / 10.0,
-                            eta, Math.round(distKm * 100.0) / 100.0, reason
-                    );
-                })
-                .sorted(Comparator.comparingDouble(RecommendationItemDto::distanceKm))
-                .limit(5)
-                .collect(Collectors.toList());
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+
+        double minEta = candidates.stream().mapToDouble(CandidateScore::etaSeconds).min().orElse(0);
+        double maxEta = candidates.stream().mapToDouble(CandidateScore::etaSeconds).max().orElse(0);
+        double minDistance = candidates.stream().mapToDouble(CandidateScore::distanceKm).min().orElse(0);
+        double maxDistance = candidates.stream().mapToDouble(CandidateScore::distanceKm).max().orElse(0);
+
+        List<ScoredCandidate> ranked = candidates.stream()
+                .map(candidate -> scoreCandidate(candidate, minEta, maxEta, minDistance, maxDistance))
+                .sorted(Comparator.comparingDouble(ScoredCandidate::score).reversed()
+                        .thenComparingDouble(candidate -> candidate.candidate().etaSeconds())
+                        .thenComparing(candidate -> candidate.candidate().resource().getId()))
+                .limit(RECOMMENDATION_LIMIT)
+                .toList();
+
+        List<RecommendationItemDto> result = new ArrayList<>();
+        for (int index = 0; index < ranked.size(); index++) {
+            result.add(toRecommendation(ranked.get(index), index + 1));
+        }
+        return result;
+    }
+
+    private boolean isEligible(DispatchResource resource, DispatchRequest request, LocalDateTime calculatedAt) {
+        if (resource.getCurrentLocation() == null || resource.getCurrentDriver() == null) {
+            return false;
+        }
+        if (resource.getUpdatedAt() == null
+                || resource.getUpdatedAt().isBefore(calculatedAt.minusSeconds(LOCATION_STALE_SECONDS))) {
+            return false;
+        }
+        return hasRequiredCapabilities(resource, request);
+    }
+
+    private CandidateScore buildCandidate(
+            DispatchResource resource, DispatchRequest request, LocalDateTime calculatedAt) {
+        double distanceKm = haversine(
+                request.getTargetLocation().getY(), request.getTargetLocation().getX(),
+                resource.getCurrentLocation().getY(), resource.getCurrentLocation().getX());
+        double etaSeconds = distanceKm / AVERAGE_SPEED_KMH * 3600;
+        long locationAgeSeconds = Math.max(
+                0, Duration.between(resource.getUpdatedAt(), calculatedAt).getSeconds());
+        return new CandidateScore(
+                resource, etaSeconds, distanceKm,
+                calculateCapability(resource, request), locationAgeSeconds, calculateRisk(resource));
+    }
+
+    private ScoredCandidate scoreCandidate(
+            CandidateScore candidate,
+            double minEta, double maxEta,
+            double minDistance, double maxDistance) {
+        double nEta = normalizeCost(candidate.etaSeconds(), minEta, maxEta);
+        double nDistance = normalizeCost(candidate.distanceKm(), minDistance, maxDistance);
+        double nCapability = clamp01(candidate.capability());
+        double nFreshness = clamp01(
+                1.0 - (double) candidate.locationAgeSeconds() / LOCATION_STALE_SECONDS);
+        double nRisk = clamp01(candidate.risk());
+        double score = ETA_WEIGHT * nEta
+                + DISTANCE_WEIGHT * nDistance
+                + CAPABILITY_WEIGHT * nCapability
+                + FRESHNESS_WEIGHT * nFreshness
+                - RISK_WEIGHT * nRisk;
+        return new ScoredCandidate(
+                candidate, score, nEta, nDistance, nCapability, nFreshness, nRisk);
+    }
+
+    private RecommendationItemDto toRecommendation(ScoredCandidate scored, int rank) {
+        CandidateScore candidate = scored.candidate();
+        List<String> reasons = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+        if (scored.nEta() >= 0.8) reasons.add("Thời gian dự kiến đến thấp");
+        if (scored.nDistance() >= 0.8) reasons.add("Khoảng cách gần");
+        if (scored.nCapability() >= 1.0) reasons.add("Đáp ứng đầy đủ năng lực yêu cầu");
+        if (scored.nFreshness() >= 0.8) reasons.add("Vị trí được cập nhật gần đây");
+        if (scored.nRisk() > 0) warnings.add("Xe có dữ liệu cảnh báo vận hành");
+
+        return new RecommendationItemDto(
+                candidate.resource().getId(),
+                candidate.resource().getResourceCode(),
+                rank,
+                round(scored.score() * 100, 2),
+                Math.round(candidate.etaSeconds()),
+                round(candidate.distanceKm(), 2),
+                candidate.resource().getUpdatedAt(),
+                "HAVERSINE_ESTIMATE",
+                new RecommendationItemDto.ScoreBreakdown(
+                        round(scored.nEta(), 4),
+                        round(scored.nDistance(), 4),
+                        round(scored.nCapability(), 4),
+                        round(scored.nFreshness(), 4),
+                        round(scored.nRisk(), 4)),
+                reasons,
+                warnings);
+    }
+
+    private boolean hasRequiredCapabilities(DispatchResource resource, DispatchRequest request) {
+        Set<String> required = stringSet(request.getExtendedRequirements(), "requiredCapabilities");
+        if (required.isEmpty()) {
+            return request.getServiceType() == null
+                    || resource.getResourceType() == null
+                    || Objects.equals(request.getServiceType().getId(), resource.getResourceType().getId());
+        }
+        return stringSet(resource.getExtendedAttributes(), "capabilities").containsAll(required);
+    }
+
+    private double calculateCapability(DispatchResource resource, DispatchRequest request) {
+        Set<String> required = stringSet(request.getExtendedRequirements(), "requiredCapabilities");
+        Set<String> preferred = stringSet(request.getExtendedRequirements(), "preferredCapabilities");
+        Set<String> actual = stringSet(resource.getExtendedAttributes(), "capabilities");
+
+        if (!preferred.isEmpty()) {
+            long matched = preferred.stream().filter(actual::contains).count();
+            return 0.75 + 0.25 * matched / preferred.size();
+        }
+        if (!required.isEmpty()) {
+            return 1.0;
+        }
+        return request.getServiceType() != null
+                && resource.getResourceType() != null
+                && Objects.equals(request.getServiceType().getId(), resource.getResourceType().getId())
+                ? 1.0 : 0.5;
+    }
+
+    private double calculateRisk(DispatchResource resource) {
+        Map<String, Object> attributes = resource.getExtendedAttributes();
+        if (attributes == null) {
+            return 0;
+        }
+        double risk = Boolean.TRUE.equals(attributes.get("maintenanceDue")) ? 0.6 : 0;
+        Object warningCount = attributes.get("activeWarningCount");
+        if (warningCount instanceof Number number) {
+            risk += Math.min(number.doubleValue() * 0.1, 0.4);
+        }
+        return clamp01(risk);
+    }
+
+    private Set<String> stringSet(Map<String, Object> source, String key) {
+        if (source == null || !(source.get(key) instanceof Collection<?> values)) {
+            return Set.of();
+        }
+        return values.stream()
+                .filter(Objects::nonNull)
+                .map(value -> value.toString().trim().toLowerCase(Locale.ROOT))
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.toSet());
+    }
+
+    private double normalizeCost(double value, double min, double max) {
+        if (Double.compare(min, max) == 0) {
+            return 1.0;
+        }
+        return clamp01(1.0 - (value - min) / (max - min));
+    }
+
+    private double clamp01(double value) {
+        return Math.max(0, Math.min(1, value));
+    }
+
+    private double round(double value, int scale) {
+        double factor = Math.pow(10, scale);
+        return Math.round(value * factor) / factor;
+    }
+
+    private record CandidateScore(
+            DispatchResource resource,
+            double etaSeconds,
+            double distanceKm,
+            double capability,
+            long locationAgeSeconds,
+            double risk) {
+    }
+
+    private record ScoredCandidate(
+            CandidateScore candidate,
+            double score,
+            double nEta,
+            double nDistance,
+            double nCapability,
+            double nFreshness,
+            double nRisk) {
     }
 
     // ──────────────────────────────────────────────
