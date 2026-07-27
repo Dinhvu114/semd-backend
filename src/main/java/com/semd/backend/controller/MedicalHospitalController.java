@@ -1,6 +1,7 @@
 package com.semd.backend.controller;
 
 import com.semd.backend.dto.MedicalHospitalDto;
+import com.semd.backend.dto.MedicalHospitalRequest;
 import com.semd.backend.dto.common.BaseResponse;
 import com.semd.backend.dto.common.Metadata;
 import com.semd.backend.dto.common.PageRequestDto;
@@ -11,8 +12,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -25,6 +28,15 @@ public class MedicalHospitalController {
 
     public MedicalHospitalController(MedicalHospitalService service) {
         this.service = service;
+    }
+
+    @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Tạo bệnh viện mới")
+    public ResponseEntity<BaseResponse<MedicalHospitalDto>> create(
+            @Valid @RequestBody MedicalHospitalRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(BaseResponse.success(service.create(request)));
     }
 
     @GetMapping
@@ -43,6 +55,23 @@ public class MedicalHospitalController {
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     public ResponseEntity<BaseResponse<MedicalHospitalDto>> getById(@PathVariable Integer id) {
         return ResponseEntity.ok(BaseResponse.success(service.getById(id)));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Cập nhật thông tin bệnh viện")
+    public ResponseEntity<BaseResponse<MedicalHospitalDto>> update(
+            @PathVariable Integer id,
+            @Valid @RequestBody MedicalHospitalRequest request) {
+        return ResponseEntity.ok(BaseResponse.success(service.update(id, request)));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Xóa bệnh viện")
+    public ResponseEntity<BaseResponse<Void>> delete(@PathVariable Integer id) {
+        service.delete(id);
+        return ResponseEntity.ok(BaseResponse.success(null));
     }
 
 }

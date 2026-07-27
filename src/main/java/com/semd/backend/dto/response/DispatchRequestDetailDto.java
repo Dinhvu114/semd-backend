@@ -29,6 +29,16 @@ public record DispatchRequestDetailDto(
         // Dispatcher
         String confirmedByName,
         LocalDateTime confirmedAt,
+        String verifiedByName,
+        LocalDateTime verifiedAt,
+        String verificationNote,
+        String rejectedByName,
+        LocalDateTime rejectedAt,
+        String rejectionReason,
+        String confirmedAddress,
+        BigDecimal confirmedLatitude,
+        BigDecimal confirmedLongitude,
+        String confirmedUrgencyLevel,
         // Missions
         long missionCount,
         // Extended

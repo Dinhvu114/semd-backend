@@ -43,8 +43,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<BaseResponse<Void>> handleUnreadableRequest(HttpMessageNotReadableException ex) {
+        String detail = ex.getMostSpecificCause() != null
+                ? ex.getMostSpecificCause().getMessage()
+                : ex.getMessage();
         BaseResponse<Void> response = BaseResponse.fail(
-                "Dữ liệu request không hợp lệ. Vui lòng kiểm tra kiểu dữ liệu và giá trị role", 400);
+                "JSON request không hợp lệ: " + detail, 400);
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
@@ -52,6 +55,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<BaseResponse<Void>> handleIllegalArgumentException(IllegalArgumentException ex) {
         BaseResponse<Void> response = BaseResponse.fail(ex.getMessage(), 400);
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(BusinessConflictException.class)
+    public ResponseEntity<BaseResponse<Void>> handleBusinessConflict(BusinessConflictException ex) {
+        BaseResponse<Void> response = BaseResponse.fail(ex.getMessage(), 409);
+        return new ResponseEntity<>(response, HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(OtpDeliveryException.class)

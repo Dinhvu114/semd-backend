@@ -4,9 +4,11 @@ import com.semd.backend.dto.DispatchRequestDto;
 import com.semd.backend.dto.request.ConfirmDispatchRequest;
 import com.semd.backend.dto.request.RejectDispatchRequest;
 import com.semd.backend.dto.request.SeverityUpdateRequest;
+import com.semd.backend.dto.request.VerifyDispatchRequest;
 import com.semd.backend.dto.response.*;
 import com.semd.backend.entity.*;
 import com.semd.backend.exception.ResourceNotFoundException;
+import com.semd.backend.exception.BusinessConflictException;
 import com.semd.backend.repository.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -113,6 +115,16 @@ public class DispatchRequestService {
                 req.getServiceType() != null ? req.getServiceType().getDisplayName() : null,
                 req.getConfirmedBy() != null ? req.getConfirmedBy().getFullName() : null,
                 req.getConfirmedAt(),
+                req.getVerifiedBy() != null ? req.getVerifiedBy().getFullName() : null,
+                req.getVerifiedAt(),
+                req.getVerificationNote(),
+                req.getRejectedBy() != null ? req.getRejectedBy().getFullName() : null,
+                req.getRejectedAt(),
+                req.getRejectionReason(),
+                req.getConfirmedAddress(),
+                req.getConfirmedLatitude(),
+                req.getConfirmedLongitude(),
+                req.getConfirmedUrgencyLevel(),
                 missionCount,
                 req.getExtendedRequirements(),
                 req.getCreatedAt()
@@ -173,21 +185,22 @@ public class DispatchRequestService {
     // 4. POST /dispatch-requests/{id}/confirm
     // ──────────────────────────────────────────────
     @Transactional
-    public Map<String, String> confirm(Integer id, ConfirmDispatchRequest req) {
+    public Map<String, String> confirm(Integer id, ConfirmDispatchRequest req, Integer currentUserId) {
         DispatchRequest request = findById(id);
 
-        if (request.getStatus() == DispatchRequestStatus.REJECTED ||
-            request.getStatus() == DispatchRequestStatus.CANCELLED ||
-            request.getStatus() == DispatchRequestStatus.COMPLETED) {
-            throw new IllegalStateException("Không thể xác nhận yêu cầu ở trạng thái: " + request.getStatus());
+        if (request.getStatus() != DispatchRequestStatus.PENDING) {
+            throw new BusinessConflictException(
+                    "Chỉ yêu cầu ở trạng thái PENDING mới được xác minh");
         }
 
-        if (req.dispatcherId() != null) {
-            userRepository.findById(req.dispatcherId())
-                    .ifPresent(request::setConfirmedBy);
-        }
-        request.setConfirmedAt(LocalDateTime.now());
+        User verifier = requireUser(currentUserId);
+        LocalDateTime now = LocalDateTime.now();
+        request.setConfirmedBy(verifier);
+        request.setConfirmedAt(now);
         request.setReviewNote(req.note());
+        request.setVerifiedBy(verifier);
+        request.setVerifiedAt(now);
+        request.setVerificationNote(req.note());
         request.setStatus(DispatchRequestStatus.CONFIRMED);
         requestRepository.save(request);
 
@@ -195,19 +208,61 @@ public class DispatchRequestService {
         return Map.of("status", "CONFIRMED");
     }
 
+    @Transactional
+    public DispatchRequestDetailDto verify(
+            Integer id,
+            VerifyDispatchRequest req,
+            Integer currentUserId) {
+        DispatchRequest request = findById(id);
+        if (request.getStatus() != DispatchRequestStatus.PENDING) {
+            throw new BusinessConflictException(
+                    "Chỉ yêu cầu ở trạng thái PENDING mới được xác minh");
+        }
+
+        validateCoordinates(req.confirmedLatitude(), req.confirmedLongitude());
+        User verifier = requireUser(currentUserId);
+        LocalDateTime now = LocalDateTime.now();
+
+        request.setStatus(DispatchRequestStatus.CONFIRMED);
+        request.setVerifiedAt(now);
+        request.setVerifiedBy(verifier);
+        request.setVerificationNote(trimToNull(req.verificationNote()));
+        request.setConfirmedAddress(trimToNull(req.confirmedAddress()));
+        request.setConfirmedLatitude(req.confirmedLatitude());
+        request.setConfirmedLongitude(req.confirmedLongitude());
+        request.setConfirmedUrgencyLevel(normalizeUrgency(req.confirmedUrgencyLevel()));
+        request.setConfirmedAt(now);
+        request.setConfirmedBy(verifier);
+        request.setReviewNote(request.getVerificationNote());
+        if (request.getConfirmedUrgencyLevel() != null) {
+            request.setUrgencyLevel(request.getConfirmedUrgencyLevel());
+        }
+
+        requestRepository.save(request);
+        broadcastUpdate(request);
+        return getDetail(id);
+    }
+
     // ──────────────────────────────────────────────
     // 5. POST /dispatch-requests/{id}/reject
     // ──────────────────────────────────────────────
     @Transactional
-    public Map<String, String> reject(Integer id, RejectDispatchRequest req) {
+    public Map<String, String> reject(Integer id, RejectDispatchRequest req, Integer currentUserId) {
         DispatchRequest request = findById(id);
 
-        if (request.getStatus() == DispatchRequestStatus.DISPATCHED ||
-            request.getStatus() == DispatchRequestStatus.COMPLETED) {
-            throw new IllegalStateException("Không thể từ chối yêu cầu ở trạng thái: " + request.getStatus());
+        if (request.getStatus() != DispatchRequestStatus.PENDING) {
+            throw new BusinessConflictException(
+                    "Chỉ yêu cầu ở trạng thái PENDING mới được từ chối");
         }
 
-        request.setReviewNote(req.reason());
+        String reason = trimToNull(req.reason());
+        if (reason == null) {
+            throw new IllegalArgumentException("Lý do từ chối không được để trống");
+        }
+        request.setReviewNote(reason);
+        request.setRejectionReason(reason);
+        request.setRejectedAt(LocalDateTime.now());
+        request.setRejectedBy(requireUser(currentUserId));
         request.setStatus(DispatchRequestStatus.REJECTED);
         requestRepository.save(request);
 
@@ -628,6 +683,48 @@ public class DispatchRequestService {
     private DispatchRequest findById(Integer id) {
         return requestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dispatch_request id: " + id));
+    }
+
+    private User requireUser(Integer userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("Không xác định được người dùng hiện tại");
+        }
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy người dùng id: " + userId));
+    }
+
+    private String trimToNull(String value) {
+        if (value == null || value.isBlank()) return null;
+        return value.trim();
+    }
+
+    private String normalizeUrgency(String urgency) {
+        String normalized = trimToNull(urgency);
+        if (normalized == null) return null;
+        normalized = normalized.toUpperCase(Locale.ROOT);
+        if (!Set.of("LOW", "MEDIUM", "HIGH", "CRITICAL").contains(normalized)) {
+            throw new IllegalArgumentException(
+                    "confirmedUrgencyLevel chỉ chấp nhận LOW, MEDIUM, HIGH hoặc CRITICAL");
+        }
+        return normalized;
+    }
+
+    private void validateCoordinates(
+            java.math.BigDecimal latitude,
+            java.math.BigDecimal longitude) {
+        if (latitude != null
+                && (latitude.compareTo(java.math.BigDecimal.valueOf(-90)) < 0
+                || latitude.compareTo(java.math.BigDecimal.valueOf(90)) > 0)) {
+            throw new IllegalArgumentException(
+                    "confirmedLatitude phải nằm trong khoảng -90 đến 90");
+        }
+        if (longitude != null
+                && (longitude.compareTo(java.math.BigDecimal.valueOf(-180)) < 0
+                || longitude.compareTo(java.math.BigDecimal.valueOf(180)) > 0)) {
+            throw new IllegalArgumentException(
+                    "confirmedLongitude phải nằm trong khoảng -180 đến 180");
+        }
     }
 
     private void broadcastUpdate(DispatchRequest request) {

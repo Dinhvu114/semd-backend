@@ -7,6 +7,7 @@ import com.semd.backend.repository.DispatchMissionRepository;
 import com.semd.backend.repository.DispatchRequestRepository;
 import com.semd.backend.repository.DispatchResourceRepository;
 import com.semd.backend.repository.MissionStatusLogRepository;
+import com.semd.backend.exception.BusinessConflictException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +46,11 @@ public class DispatchMissionService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy dispatch_request id: " + req.getRequestId()));
 
         // 2. Kiểm tra xe tồn tại
+        if (request.getStatus() != DispatchRequestStatus.CONFIRMED) {
+            throw new BusinessConflictException(
+                    "Dispatch request chưa được xác minh");
+        }
+
         DispatchResource resource = resourceRepository.findById(req.getResourceId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy xe id: " + req.getResourceId()));
 

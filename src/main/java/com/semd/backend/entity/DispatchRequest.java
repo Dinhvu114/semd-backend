@@ -63,6 +63,38 @@ public class DispatchRequest {
     @Column(name = "review_note", columnDefinition = "text")
     private String reviewNote;
 
+    @Column(name = "verified_at")
+    private LocalDateTime verifiedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "verified_by")
+    private User verifiedBy;
+
+    @Column(name = "verification_note", columnDefinition = "text")
+    private String verificationNote;
+
+    @Column(name = "rejected_at")
+    private LocalDateTime rejectedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "rejected_by")
+    private User rejectedBy;
+
+    @Column(name = "rejection_reason", columnDefinition = "text")
+    private String rejectionReason;
+
+    @Column(name = "confirmed_address", length = 500)
+    private String confirmedAddress;
+
+    @Column(name = "confirmed_latitude", precision = 10, scale = 7)
+    private BigDecimal confirmedLatitude;
+
+    @Column(name = "confirmed_longitude", precision = 10, scale = 7)
+    private BigDecimal confirmedLongitude;
+
+    @Column(name = "confirmed_urgency_level", length = 20)
+    private String confirmedUrgencyLevel;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -108,6 +140,27 @@ public class DispatchRequest {
 
     public String getReviewNote() { return reviewNote; }
     public void setReviewNote(String reviewNote) { this.reviewNote = reviewNote; }
+
+    public LocalDateTime getVerifiedAt() { return verifiedAt; }
+    public void setVerifiedAt(LocalDateTime verifiedAt) { this.verifiedAt = verifiedAt; }
+    public User getVerifiedBy() { return verifiedBy; }
+    public void setVerifiedBy(User verifiedBy) { this.verifiedBy = verifiedBy; }
+    public String getVerificationNote() { return verificationNote; }
+    public void setVerificationNote(String verificationNote) { this.verificationNote = verificationNote; }
+    public LocalDateTime getRejectedAt() { return rejectedAt; }
+    public void setRejectedAt(LocalDateTime rejectedAt) { this.rejectedAt = rejectedAt; }
+    public User getRejectedBy() { return rejectedBy; }
+    public void setRejectedBy(User rejectedBy) { this.rejectedBy = rejectedBy; }
+    public String getRejectionReason() { return rejectionReason; }
+    public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
+    public String getConfirmedAddress() { return confirmedAddress; }
+    public void setConfirmedAddress(String confirmedAddress) { this.confirmedAddress = confirmedAddress; }
+    public BigDecimal getConfirmedLatitude() { return confirmedLatitude; }
+    public void setConfirmedLatitude(BigDecimal confirmedLatitude) { this.confirmedLatitude = confirmedLatitude; }
+    public BigDecimal getConfirmedLongitude() { return confirmedLongitude; }
+    public void setConfirmedLongitude(BigDecimal confirmedLongitude) { this.confirmedLongitude = confirmedLongitude; }
+    public String getConfirmedUrgencyLevel() { return confirmedUrgencyLevel; }
+    public void setConfirmedUrgencyLevel(String confirmedUrgencyLevel) { this.confirmedUrgencyLevel = confirmedUrgencyLevel; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

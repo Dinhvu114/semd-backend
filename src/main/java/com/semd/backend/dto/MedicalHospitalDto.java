@@ -4,7 +4,6 @@ import java.util.Map;
 
 public record MedicalHospitalDto(
     Integer id,
-    Integer ownerUserId,
     String hospitalName,
     String hospitalAddress,
     Double longitude,

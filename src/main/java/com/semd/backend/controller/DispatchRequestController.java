@@ -5,6 +5,8 @@ import com.semd.backend.dto.common.BaseResponse;
 import com.semd.backend.dto.request.ConfirmDispatchRequest;
 import com.semd.backend.dto.request.RejectDispatchRequest;
 import com.semd.backend.dto.request.SeverityUpdateRequest;
+import com.semd.backend.dto.request.VerifyDispatchRequest;
+import com.semd.backend.security.UserPrincipal;
 import com.semd.backend.dto.response.*;
 import com.semd.backend.service.DispatchRequestService;
 import com.semd.backend.entity.DispatchRequestStatus;
@@ -18,6 +20,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springdoc.core.annotations.ParameterObject;
 
 import java.util.List;
@@ -96,8 +99,23 @@ public class DispatchRequestController {
                description = "Dispatcher xác nhận đây là ca thật, chuyển trạng thái sang CONFIRMED")
     public ResponseEntity<BaseResponse<Map<String, String>>> confirm(
             @PathVariable Integer id,
-            @RequestBody ConfirmDispatchRequest request) {
-        return ResponseEntity.ok(BaseResponse.success(requestService.confirm(id, request)));
+            @RequestBody ConfirmDispatchRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(BaseResponse.success(
+                requestService.confirm(id, request, principal.getId())));
+    }
+
+    @PostMapping("/{id}/verify")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    @Operation(
+            summary = "Xác minh yêu cầu điều phối",
+            description = "Chuyển trạng thái PENDING sang CONFIRMED sau khi kiểm tra EmergencyCall")
+    public ResponseEntity<BaseResponse<DispatchRequestDetailDto>> verify(
+            @PathVariable Integer id,
+            @RequestBody VerifyDispatchRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(BaseResponse.success(
+                requestService.verify(id, request, principal.getId())));
     }
 
     // ──────────────────────────────────────────────
@@ -109,8 +127,10 @@ public class DispatchRequestController {
                description = "Dispatcher từ chối yêu cầu, chuyển trạng thái sang REJECTED")
     public ResponseEntity<BaseResponse<Map<String, String>>> reject(
             @PathVariable Integer id,
-            @RequestBody RejectDispatchRequest request) {
-        return ResponseEntity.ok(BaseResponse.success(requestService.reject(id, request)));
+            @RequestBody RejectDispatchRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(BaseResponse.success(
+                requestService.reject(id, request, principal.getId())));
     }
 
     // ──────────────────────────────────────────────
