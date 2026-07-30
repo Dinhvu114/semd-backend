@@ -2,14 +2,13 @@ package com.semd.backend.entity;
 
 public enum DispatchMissionStatus {
     CREATED,
-    ASSIGNED,
+    DISPATCHED,
     ACCEPTED,
+    REJECTED,
     EN_ROUTE,
-    ON_SCENE,
+    ARRIVED_SCENE,
     TRANSPORTING,
+    ARRIVED_HOSPITAL,
     COMPLETED,
-    DECLINED,
-    FAILED,
-    TIMEOUT,
     CANCELLED
 }

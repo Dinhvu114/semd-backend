@@ -31,14 +31,32 @@ public class DispatchMission {
     @Column(name = "status", length = 30)
     private DispatchMissionStatus status = DispatchMissionStatus.CREATED;
 
+    @Column(name = "reject_reason")
+    private String rejectReason;
+
+    @Column(name = "en_route_at")
+    private LocalDateTime enRouteAt;
+
+    @Column(name = "arrived_scene_at")
+    private LocalDateTime arrivedSceneAt;
+
+    @Column(name = "start_transport_at")
+    private LocalDateTime startTransportAt;
+
+    @Column(name = "arrived_hospital_at")
+    private LocalDateTime arrivedHospitalAt;
+
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
+    @Column(name = "cancel_reason")
+    private String cancelReason;
+
     @Column(name = "dispatched_at")
     private LocalDateTime dispatchedAt = LocalDateTime.now();
 
     @Column(name = "accepted_at")
     private LocalDateTime acceptedAt;
-
-    @Column(name = "en_route_at")
-    private LocalDateTime enRouteAt;
 
     @Column(name = "on_scene_at")
     private LocalDateTime onSceneAt;
@@ -155,6 +173,48 @@ public class DispatchMission {
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public void setRejectReason(String rejectReason) {
+        this.rejectReason = rejectReason;
+    }
+    public String getRejectReason() {
+        return rejectReason;
+    }
+
+    public void setArrivedSceneAt(LocalDateTime arrivedSceneAt) {
+        this.arrivedSceneAt = arrivedSceneAt;
+    }
+    public LocalDateTime getArrivedSceneAt() {
+        return arrivedSceneAt;
+    }
+
+    public void setCancelledAt(LocalDateTime cancelledAt) {
+        this.cancelledAt = cancelledAt;
+    }
+    public LocalDateTime getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public void setCancelledReason(String cancelReason) {
+        this.cancelReason = cancelReason;
+    }
+    public String getCancelledReason() {
+        return cancelReason;
+    }
+
+    public void setStartTransportAt(LocalDateTime startTransportAt) {
+        this.startTransportAt = startTransportAt;
+    }
+    public LocalDateTime getStartTransportAt() {
+        return startTransportAt;
+    }
+
+    public void setArrivedHospitalAt(LocalDateTime arrivedHospitalAt) {
+        this.arrivedHospitalAt = arrivedHospitalAt;
+    }
+    public LocalDateTime getArrivedHospitalAt() {
+        return arrivedHospitalAt;
     }
 }
 

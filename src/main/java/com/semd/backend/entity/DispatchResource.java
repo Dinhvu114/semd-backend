@@ -82,6 +82,6 @@ public class DispatchResource {
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 
-    // public Integer getCurrentDriverId() { return currentDriverId; }
+    //  public Integer getCurrentDriverId() { return currentDriverId; }
     // public void setCurrentDriverId(Integer currentDriverId) { this.currentDriverId = currentDriverId; }
 }

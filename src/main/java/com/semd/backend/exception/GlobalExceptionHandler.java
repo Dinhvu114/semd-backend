@@ -8,6 +8,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import com.semd.backend.service.DispatchMissionService.MissionException;
 
 import java.util.stream.Collectors;
 
@@ -74,5 +75,12 @@ public class GlobalExceptionHandler {
         ex.printStackTrace(); // Log the stack trace for debugging
         BaseResponse<Void> response = BaseResponse.fail("Lỗi hệ thống: " + ex.getMessage(), 500);
         return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler(MissionException.class)
+    public ResponseEntity<BaseResponse<Void>> handleMissionException(MissionException ex) {
+        BaseResponse<Void> response = BaseResponse.fail(ex.getMessage(), ex.getHttpStatus());
+        return new ResponseEntity<>(response, HttpStatus.valueOf(ex.getHttpStatus()));
+
     }
 }

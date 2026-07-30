@@ -1,6 +1,7 @@
 package com.semd.backend.entity;
 
 public enum DispatchRequestStatus {
+    VERIFIED,
     PENDING,
     CONFIRMED,
     RECOMMENDING,
