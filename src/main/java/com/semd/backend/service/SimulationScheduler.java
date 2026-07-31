@@ -49,6 +49,13 @@ public class SimulationScheduler {
         return f != null && !f.isDone();
     }
 
+    // Chạy 1 lần sau delay (dùng cho chờ ở hiện trường)
+    public void scheduleOnce(Long simulationId, Runnable task, long delayMs) {
+        ScheduledFuture<?> future = executor.schedule(task, delayMs, TimeUnit.MILLISECONDS);
+        registry.put(simulationId, future);
+        log.info("Scheduled once simulation {} after {}ms", simulationId, delayMs);
+    }
+
     @PreDestroy
     public void shutdown() {
         log.info("Shutting down SimulationScheduler, cancelling {} tasks", registry.size());
