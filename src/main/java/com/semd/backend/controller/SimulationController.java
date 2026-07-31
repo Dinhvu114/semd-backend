@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -23,6 +24,7 @@ public class SimulationController {
 
     // ── DISPATCHER / ADMIN ─────────────────────────────────
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     @Operation(
             summary = "Tạo phiên mô phỏng mới",
             description = "Quyền: DISPATCHER, ADMIN"
@@ -33,6 +35,7 @@ public class SimulationController {
     }
 
     @PostMapping("/{id}/start")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     @Operation(
             summary = "Bắt đầu / tiếp tục mô phỏng",
             description = "Quyền: DISPATCHER, ADMIN"
@@ -42,6 +45,7 @@ public class SimulationController {
     }
 
     @PostMapping("/{id}/stop")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     @Operation(
             summary = "Dừng mô phỏng",
             description = "Quyền: DISPATCHER, ADMIN"
@@ -51,6 +55,7 @@ public class SimulationController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     @Operation(
             summary = "Lấy trạng thái phiên mô phỏng",
             description = "Quyền: DISPATCHER, ADMIN"
@@ -61,6 +66,7 @@ public class SimulationController {
 
     // ── THEO DÕI HÀNH TRÌNH — REPORTER / DRIVER / DISPATCHER ──
     @GetMapping("/{id}/tracking")
+    @PreAuthorize("isAuthenticated()")
     @Operation(
             summary = "Theo dõi vị trí xe theo simulation ID",
             description = "Quyền: REPORTER, DRIVER, DISPATCHER, ADMIN. " +
@@ -71,6 +77,7 @@ public class SimulationController {
     }
 
     @GetMapping("/by-mission/{missionId}/tracking")
+    @PreAuthorize("isAuthenticated()")
     @Operation(
             summary = "Theo dõi vị trí xe theo mission ID",
             description = "Quyền: REPORTER, DRIVER, DISPATCHER, ADMIN. " +
