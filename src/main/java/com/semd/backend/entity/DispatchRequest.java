@@ -25,7 +25,7 @@ public class DispatchRequest {
     private ServiceType serviceType;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "edge_node_id")
+    @JoinColumn(name = "zone_id")
     private OperationZone operationZone;
 
     @ManyToOne(fetch = FetchType.LAZY)

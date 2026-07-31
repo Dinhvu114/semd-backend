@@ -29,7 +29,7 @@ public class DispatchMission {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30)
-    private DispatchMissionStatus status = DispatchMissionStatus.CREATED;
+    private DispatchMissionStatus status;
 
     @Column(name = "reject_reason")
     private String rejectReason;

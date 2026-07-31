@@ -60,10 +60,10 @@ public class DispatchRequestController {
             @RequestParam(required = false) DispatchRequestStatus status,
             @RequestParam(required = false) String urgencyLevel,
             @RequestParam(required = false) Integer serviceTypeId,
-            @RequestParam(required = false) Integer edgeNodeId,
+            @RequestParam(required = false) Integer zoneId,
             @ParameterObject @ModelAttribute PageRequestDto pagination) {
         Page<DispatchRequestDto> result = requestService.search(
-                status, urgencyLevel, serviceTypeId, edgeNodeId,
+                status, urgencyLevel, serviceTypeId, zoneId,
                 pagination.toPageable(Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))));
         return ResponseEntity.ok(BaseResponse.success(result.getContent(), Metadata.from(result)));
     }

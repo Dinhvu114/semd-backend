@@ -152,3 +152,32 @@ Hệ thống sử dụng **Redis** để quản lý session và token đăng nh�
 5. **Dừng/Chạy lại Redis khi cần thiết:**
    * Dừng container: `docker stop semd-redis`
    * Chạy lại container: `docker start semd-redis`
+
+## 10. Các máy trạng thái##
+1. DispatchRequest:
+* Luồng chính:
+PENDING -> CONFIRMED -> RECOMMENDING -> DISPATCHING -> DISPATCHED -> COMPLETED
+(chờ duyệt -> xác nhận -> hệ thống đề xuất -> đang giao nhiệm vụ -> đã giao nhiệm vụ -> hoàn thành)
+* Ngoại lệ:
+REJECTED: tài xế từ chối
+CANCELLED: nhiệm vụ đã bị hủy
+FAILED: yêu cầu điều phối thất bại
+2. DispatchMission:
+* Luồng chính:
+DISPATCHED -> ACCEPTED -> EN_ROUTE -> ARRIVED_SCENE -> TRANSPORTING -> ARRIVED_HOSPITAL -> COMPLETED
+(đã giao nhiệm vụ -> tài xế chấp nhận -> trên đường -> tới hiện trường -> đang vận chuyển -> đã đến đích -> hoàn thành)
+* Ngoại lệ
+DECLINED: nhiệm vụ bị từ chối
+TIMEOUT: hết giờ
+CANCELLED: nhiệm vụ bị hủy
+FAILED: nhiệm vụ thất bại
+3. DispatchResource:
+* Luồng chính:
+AVAILABLE -> DISPATCHED -> ON_MISSION -> RETURNING
+(sẵn sàng -> đã giao nhiệm vụ -> đang thực hiện nhiệm vụ -> đang trở về)
+trạng thái RETURNING chưa cần sử dụng ngay
+OFFLINE
+MAINTENANCE
+OUT_OF_SERVICE
+
+operationZone đổi từ edgeNode, zoneId đổi từ edgeNodeId

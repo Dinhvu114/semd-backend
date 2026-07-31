@@ -1,12 +1,11 @@
 package com.semd.backend.entity;
 
 public enum DispatchResourceStatus {
-    AVAILABLE,
-    RESERVED,
-    DISPATCHED,
-    ON_MISSION,
-    RETURNING,
-    OFFLINE,
-    MAINTENANCE,
-    OUT_OF_SERVICE
+    AVAILABLE,      // sẵn sàng
+    DISPATCHED,     // đã giao nhiệm vụ
+    ON_MISSION,     // đang thực hiện nhiệm vụ
+    RETURNING,      // đang trở về
+    OFFLINE,        // ngoại tuyến
+    MAINTENANCE,    // đang bảo trì
+    OUT_OF_SERVICE  // không thực hiện
 }

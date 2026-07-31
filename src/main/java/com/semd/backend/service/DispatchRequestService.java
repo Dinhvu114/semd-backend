@@ -524,7 +524,7 @@ public class DispatchRequestService {
         DispatchMission newMission = new DispatchMission();
         newMission.setRequest(request);
         newMission.setResource(newResource);
-        newMission.setStatus(DispatchMissionStatus.CREATED);
+        newMission.setStatus(DispatchMissionStatus.DISPATCHED);
         DispatchMission saved = missionRepository.save(newMission);
 
         request.setStatus(DispatchRequestStatus.DISPATCHED);
@@ -533,7 +533,7 @@ public class DispatchRequestService {
         MissionStatusLog log = new MissionStatusLog();
         log.setMission(saved);
         log.setOldStatus(null);
-        log.setNewStatus(DispatchMissionStatus.CREATED.name());
+        log.setNewStatus(DispatchMissionStatus.DISPATCHED.name());
         log.setNote("Điều phối lại với xe: " + newResource.getResourceCode());
         log.setCreatedAt(LocalDateTime.now());
         statusLogRepository.save(log);

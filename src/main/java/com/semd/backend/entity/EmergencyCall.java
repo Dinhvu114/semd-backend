@@ -43,7 +43,11 @@ public class EmergencyCall {
     private BigDecimal aiConfidenceScore;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", length = 30)
+    @Column(name = "call_type", nullable = false, length = 20)
+    private EmergencyCallType callType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 30)
     private EmergencyCallStatus status = EmergencyCallStatus.RECEIVED;
 
     @Column(name = "created_at")
@@ -83,6 +87,9 @@ public class EmergencyCall {
 
     public BigDecimal getAiConfidenceScore() { return aiConfidenceScore; }
     public void setAiConfidenceScore(BigDecimal aiConfidenceScore) { this.aiConfidenceScore = aiConfidenceScore; }
+
+    public EmergencyCallType getCallType() { return callType; }
+    public void setCallType(EmergencyCallType callType) { this.callType = callType; }
 
     public EmergencyCallStatus getStatus() { return status; }
     public void setStatus(EmergencyCallStatus status) { this.status = status; }

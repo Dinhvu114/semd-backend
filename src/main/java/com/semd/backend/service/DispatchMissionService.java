@@ -58,8 +58,8 @@ public class DispatchMissionService {
                         "Không tìm thấy dispatch_request id: " + req.getRequestId()));
 
         // 2. Kiểm tra request đã được xác minh chưa
-        if (request.getStatus() != DispatchRequestStatus.VERIFIED) {
-            throw new MissionException(409, "REQUEST_NOT_VERIFIED",
+        if (request.getStatus() != DispatchRequestStatus.CONFIRMED) {
+            throw new MissionException(409, "REQUEST_NOT_CONFIRMED",
                     "Request chưa được Dispatcher xác minh, status hiện tại: "
                             + request.getStatus());
         }

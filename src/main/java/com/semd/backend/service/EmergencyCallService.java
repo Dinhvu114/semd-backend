@@ -59,6 +59,7 @@ public class EmergencyCallService {
         call.setReporterPhone(reporterPhone);
         call.setReporterName(reporterName);
         call.setCallStartTime(LocalDateTime.now());
+        call.setCallType(EmergencyCallType.SOS);
         call.setStatus(EmergencyCallStatus.CONFIRMED);
         
         if (longitude != null && latitude != null) {
@@ -114,6 +115,7 @@ public class EmergencyCallService {
         call.setReporterName(reporterName);
         call.setCallStartTime(LocalDateTime.now());
         call.setAudioUrl(audioUrl);
+        call.setCallType(EmergencyCallType.CALL);
         call.setStatus(EmergencyCallStatus.RECEIVED);
         
         if (longitude != null && latitude != null) {
@@ -155,6 +157,7 @@ public class EmergencyCallService {
         Map<String, Object> data = new HashMap<>();
         data.put("reporterPhone", call.getReporterPhone());
         data.put("reporterName", call.getReporterName());
+        data.put("callType", call.getCallType().name());
         data.put("status", call.getStatus().name());
         data.put("audioUrl", call.getAudioUrl());
         data.put("longitude", longitude);

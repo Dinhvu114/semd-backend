@@ -40,7 +40,7 @@ public interface DispatchMissionRepository extends JpaRepository<DispatchMission
     Optional<DispatchMission> findByIdWithLock(@Param("id") Integer id);
 
     @Query("SELECT m FROM DispatchMission m " +
-            "WHERE m.resource.currentDriverId = :driverId " +
+            "WHERE m.resource.currentDriver = :driverId " +
             "AND m.status NOT IN ('COMPLETED','CANCELLED','REJECTED')")
     List<DispatchMission> findActiveMissionsByDriverId(@Param("driverId") Integer driverId);
 
