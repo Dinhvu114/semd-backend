@@ -26,32 +26,33 @@ public class OsrmClient {
     @Value("${app.osrm.max-retries:2}")
     private int maxRetries;
 
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofMillis(2000))
-            .build();
+    // Đọc từ config thay vì hard-code
+    @Value("${app.osrm.connect-timeout-ms:2000}")
+    private int connectTimeoutMs;
+
+    @Value("${app.osrm.read-timeout-ms:5000}")
+    private int readTimeoutMs;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /**
-     * Gọi OSRM Route API
-     * @param fromLon kinh độ điểm đầu
-     * @param fromLat vĩ độ điểm đầu
-     * @param toLon   kinh độ điểm cuối
-     * @param toLat   vĩ độ điểm cuối
-     */
     public OsrmRouteResponse getRoute(double fromLon, double fromLat,
                                       double toLon,   double toLat) {
-        // OSRM dùng thứ tự longitude,latitude
         String url = String.format(
-                "%s/route/v1/%s/%f,%f;%f,%f?overview=full&geometries=geojson&steps=true&annotations=duration,distance",
+                "%s/route/v1/%s/%f,%f;%f,%f" +
+                        "?overview=full&geometries=geojson&steps=true&annotations=duration,distance",
                 baseUrl, profile, fromLon, fromLat, toLon, toLat
         );
 
+        Exception lastException = null;
         for (int attempt = 1; attempt <= maxRetries + 1; attempt++) {
             try {
+                HttpClient httpClient = HttpClient.newBuilder()
+                        .connectTimeout(Duration.ofMillis(connectTimeoutMs))
+                        .build();
+
                 HttpRequest req = HttpRequest.newBuilder()
                         .uri(URI.create(url))
-                        .timeout(Duration.ofMillis(5000))
+                        .timeout(Duration.ofMillis(readTimeoutMs))
                         .GET()
                         .build();
 
@@ -59,7 +60,7 @@ public class OsrmClient {
                         HttpResponse.BodyHandlers.ofString());
 
                 if (res.statusCode() != 200) {
-                    throw new RuntimeException("OSRM trả HTTP " + res.statusCode());
+                    throw new RuntimeException("OSRM HTTP " + res.statusCode());
                 }
 
                 OsrmRouteResponse response = objectMapper.readValue(
@@ -72,12 +73,10 @@ public class OsrmClient {
                 return response;
 
             } catch (Exception e) {
-                log.warn("OSRM attempt {}/{} failed: {}", attempt, maxRetries + 1, e.getMessage());
-                if (attempt > maxRetries) {
-                    throw new RuntimeException("OSRM_UNAVAILABLE: " + e.getMessage());
-                }
+                lastException = e;
+                log.warn("OSRM attempt {}/{}: {}", attempt, maxRetries + 1, e.getMessage());
             }
         }
-        throw new RuntimeException("OSRM_UNAVAILABLE");
+        throw new RuntimeException("OSRM_UNAVAILABLE: " + lastException.getMessage());
     }
 }

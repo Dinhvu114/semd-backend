@@ -1,21 +1,24 @@
 package com.semd.backend.dto.request;
 
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
 public class CreateSimulationRequest {
 
-    @NotNull
+    @NotNull(message = "missionId không được để trống")
     private Integer missionId;
 
-    @NotNull
+    @NotNull(message = "hospitalId không được để trống")
     private Integer hospitalId;
 
-    @Min(250)
+    @Min(value = 250, message = "tickIntervalMs phải >= 250ms")
     private Integer tickIntervalMs = 1000;
 
+    @DecimalMin(value = "0.1", message = "speedMultiplier phải > 0")
     private Double speedMultiplier = 10.0;
 
+    @Min(value = 0, message = "sceneWaitSeconds phải >= 0")
     private Integer sceneWaitSeconds = 5;
 
     public Integer getMissionId() { return missionId; }
