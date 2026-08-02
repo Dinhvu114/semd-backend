@@ -159,15 +159,15 @@ Hệ thống sử dụng **Redis** để quản lý session và token đăng nh�
 PENDING -> CONFIRMED -> RECOMMENDING -> DISPATCHING -> DISPATCHED -> COMPLETED
 (chờ duyệt -> xác nhận -> hệ thống đề xuất -> đang giao nhiệm vụ -> đã giao nhiệm vụ -> hoàn thành)
 * Ngoại lệ:
-REJECTED: tài xế từ chối
-CANCELLED: nhiệm vụ đã bị hủy
-FAILED: yêu cầu điều phối thất bại
+REJECTED: yêu cầu bị điều phối viên xác nhận là không hợp lệ
+CANCELLED: yêu cầu đã bị hủy
+FAILED: yêu cầu điều phối thất bại do hệ thống/nghiệp vụ
 2. DispatchMission:
 * Luồng chính:
 DISPATCHED -> ACCEPTED -> EN_ROUTE -> ARRIVED_SCENE -> TRANSPORTING -> ARRIVED_HOSPITAL -> COMPLETED
 (đã giao nhiệm vụ -> tài xế chấp nhận -> trên đường -> tới hiện trường -> đang vận chuyển -> đã đến đích -> hoàn thành)
 * Ngoại lệ
-DECLINED: nhiệm vụ bị từ chối
+REJECTED: tài xế từ chối nhiệm vụ
 TIMEOUT: hết giờ
 CANCELLED: nhiệm vụ bị hủy
 FAILED: nhiệm vụ thất bại
@@ -180,4 +180,6 @@ OFFLINE
 MAINTENANCE
 OUT_OF_SERVICE
 
+## Lưu ý: DispatchRequest.REJECTED KHÁC DispatchMission.REJECTED ##
+* (Yêu cầu bị từ chối bởi điều phối KHÁC tài xế từ chối nhiệm vụ)
 operationZone đổi từ edgeNode, zoneId đổi từ edgeNodeId
