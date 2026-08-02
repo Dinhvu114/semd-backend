@@ -173,13 +173,13 @@ public class DispatchRequestController {
     // ──────────────────────────────────────────────
     // 9. POST /dispatch-requests/{id}/cancel
     // ──────────────────────────────────────────────
-    @PostMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
-    @Operation(summary = "Hủy yêu cầu điều phối",
-               description = "Hủy yêu cầu, tự động giải phóng xe đang gắn (nếu có) về trạng thái AVAILABLE")
-    public ResponseEntity<BaseResponse<Map<String, String>>> cancel(@PathVariable Integer id) {
-        return ResponseEntity.ok(BaseResponse.success(requestService.cancel(id)));
-    }
+    // @PostMapping("/{id}/cancel")
+    // @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    // @Operation(summary = "Hủy yêu cầu điều phối",
+    //            description = "Hủy yêu cầu, tự động giải phóng xe đang gắn (nếu có) về trạng thái AVAILABLE")
+    // public ResponseEntity<BaseResponse<Map<String, String>>> cancel(@PathVariable Integer id) {
+    //     return ResponseEntity.ok(BaseResponse.success(requestService.cancel(id)));
+    // }
 
     // ──────────────────────────────────────────────
     // 10. GET /dispatch-requests/{id}/timeline

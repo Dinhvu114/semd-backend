@@ -8,6 +8,6 @@ public enum DispatchRequestStatus {
     DISPATCHED,     // đã giao nhiệm vụ
     COMPLETED,      // hoàn thành
     REJECTED,       // đã từ chối
-    CANCELLED,      // đã hủy
+    // CANCELLED,      // đã hủy
     FAILED          // thất bại
 }

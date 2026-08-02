@@ -6,6 +6,6 @@ public record StatisticsResponse(
         long confirmed,
         long dispatching,
         long completedToday,
-        long rejected,
-        long cancelled
+        long rejected
+        // long cancelled
 ) {}

@@ -108,8 +108,8 @@ public class DashboardQueryService {
                 "pendingRequests", count(reqs, r -> r.getStatus() == DispatchRequestStatus.PENDING),
                 "processingRequests", count(reqs, r -> PROCESSING_REQUESTS.contains(r.getStatus())),
                 "completedRequests", count(reqs, r -> r.getStatus() == DispatchRequestStatus.COMPLETED),
-                "failedRequests", count(reqs, r -> EnumSet.of(DispatchRequestStatus.REJECTED,
-                        DispatchRequestStatus.CANCELLED, DispatchRequestStatus.FAILED).contains(r.getStatus())),
+                // "failedRequests", count(reqs, r -> EnumSet.of(DispatchRequestStatus.REJECTED,
+                //         DispatchRequestStatus.CANCELLED, DispatchRequestStatus.FAILED).contains(r.getStatus())),
                 "criticalPendingRequests", count(reqs, r -> r.getStatus() == DispatchRequestStatus.PENDING
                         && "CRITICAL".equalsIgnoreCase(urgency(r))),
                 "availableResources", count(rs, r -> r.getStatus() == DispatchResourceStatus.AVAILABLE),

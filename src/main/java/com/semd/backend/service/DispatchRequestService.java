@@ -285,13 +285,27 @@ public class DispatchRequestService {
     // ──────────────────────────────────────────────
     // 7. POST /dispatch-requests/{id}/recommend
     // ──────────────────────────────────────────────
-    @Transactional(readOnly = true)
+    @Transactional
     public List<RecommendationItemDto> recommend(Integer id) {
         DispatchRequest request = findById(id);
 
+        if (request.getStatus() != DispatchRequestStatus.CONFIRMED
+                && request.getStatus() != DispatchRequestStatus.RECOMMENDING) {
+            throw new BusinessConflictException(
+                    "Chỉ request CONFIRMED hoặc RECOMMENDING mới được đề xuất xe"
+            );
+        }
         if (request.getTargetLocation() == null) {
             throw new IllegalStateException("Yêu cầu #" + id + " chưa có tọa độ để đề xuất xe.");
         }
+
+        // Lần đầu gọi recommendation:
+        // CONFIRMED -> RECOMMENDING
+        if (request.getStatus() == DispatchRequestStatus.CONFIRMED) {
+        request.setStatus(DispatchRequestStatus.RECOMMENDING);
+        requestRepository.save(request);
+        broadcastUpdate(request);
+    }
 
         LocalDateTime calculatedAt = LocalDateTime.now();
         List<CandidateScore> candidates = resourceRepository
@@ -545,39 +559,39 @@ public class DispatchRequestService {
     // ──────────────────────────────────────────────
     // 9. POST /dispatch-requests/{id}/cancel
     // ──────────────────────────────────────────────
-    @Transactional
-    public Map<String, String> cancel(Integer id) {
-        DispatchRequest request = findById(id);
+    // @Transactional
+    // public Map<String, String> cancel(Integer id) {
+    //     DispatchRequest request = findById(id);
 
-        if (request.getStatus() == DispatchRequestStatus.COMPLETED) {
-            throw new IllegalStateException("Không thể hủy yêu cầu đã hoàn thành.");
-        }
+    //     if (request.getStatus() == DispatchRequestStatus.COMPLETED) {
+    //         throw new IllegalStateException("Không thể hủy yêu cầu đã hoàn thành.");
+    //     }
 
-        // Giải phóng xe đang gắn (nếu có)
-        missionRepository.findActiveMissionByRequestId(id).ifPresent(mission -> {
-            mission.setStatus(DispatchMissionStatus.CANCELLED);
-            DispatchResource resource = mission.getResource();
-            if (resource != null) {
-                resource.setStatus(DispatchResourceStatus.AVAILABLE);
-                resourceRepository.save(resource);
-            }
+    //     // Giải phóng xe đang gắn (nếu có)
+    //     missionRepository.findActiveMissionByRequestId(id).ifPresent(mission -> {
+    //         mission.setStatus(DispatchMissionStatus.CANCELLED);
+    //         DispatchResource resource = mission.getResource();
+    //         if (resource != null) {
+    //             resource.setStatus(DispatchResourceStatus.AVAILABLE);
+    //             resourceRepository.save(resource);
+    //         }
 
-            MissionStatusLog log = new MissionStatusLog();
-            log.setMission(mission);
-            log.setOldStatus(mission.getStatus().name());
-            log.setNewStatus(DispatchMissionStatus.CANCELLED.name());
-            log.setNote("Hủy yêu cầu - giải phóng xe");
-            log.setCreatedAt(LocalDateTime.now());
-            statusLogRepository.save(log);
-            missionRepository.save(mission);
-        });
+    //         MissionStatusLog log = new MissionStatusLog();
+    //         log.setMission(mission);
+    //         log.setOldStatus(mission.getStatus().name());
+    //         log.setNewStatus(DispatchMissionStatus.CANCELLED.name());
+    //         log.setNote("Hủy yêu cầu - giải phóng xe");
+    //         log.setCreatedAt(LocalDateTime.now());
+    //         statusLogRepository.save(log);
+    //         missionRepository.save(mission);
+    //     });
 
-        request.setStatus(DispatchRequestStatus.CANCELLED);
-        requestRepository.save(request);
+    //     request.setStatus(DispatchRequestStatus.CANCELLED);
+    //     requestRepository.save(request);
 
-        broadcastUpdate(request);
-        return Map.of("status", "CANCELLED");
-    }
+    //     broadcastUpdate(request);
+    //     return Map.of("status", "CANCELLED");
+    // }
 
     // ──────────────────────────────────────────────
     // 10. GET /dispatch-requests/{id}/timeline
@@ -638,8 +652,8 @@ public class DispatchRequestService {
                 requestRepository.countByStatus(DispatchRequestStatus.CONFIRMED),
                 requestRepository.countByStatus(DispatchRequestStatus.DISPATCHED),
                 requestRepository.countByStatusAndCreatedAtAfter(DispatchRequestStatus.COMPLETED, startOfToday),
-                requestRepository.countByStatus(DispatchRequestStatus.REJECTED),
-                requestRepository.countByStatus(DispatchRequestStatus.CANCELLED)
+                requestRepository.countByStatus(DispatchRequestStatus.REJECTED)
+                // requestRepository.countByStatus(DispatchRequestStatus.CANCELLED)
         );
     }
 
