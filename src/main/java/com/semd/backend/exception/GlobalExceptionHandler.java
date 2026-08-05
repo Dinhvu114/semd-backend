@@ -9,6 +9,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.semd.backend.service.DispatchMissionService.MissionException;
+import com.semd.backend.service.AmbulanceJourneyService.SimulationException;
 
 import java.util.stream.Collectors;
 
@@ -82,5 +83,11 @@ public class GlobalExceptionHandler {
         BaseResponse<Void> response = BaseResponse.fail(ex.getMessage(), ex.getHttpStatus());
         return new ResponseEntity<>(response, HttpStatus.valueOf(ex.getHttpStatus()));
 
+    }
+
+    @ExceptionHandler(SimulationException.class)
+    public ResponseEntity<BaseResponse<Void>> handleSimulationException(SimulationException ex) {
+        BaseResponse<Void> response = BaseResponse.fail(ex.getMessage(), ex.getHttpStatus());
+        return new ResponseEntity<>(response, HttpStatus.valueOf(ex.getHttpStatus()));
     }
 }

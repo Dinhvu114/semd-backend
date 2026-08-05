@@ -4,10 +4,12 @@ import com.semd.backend.entity.AmbulanceSimulation;
 import com.semd.backend.entity.SimulationStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface AmbulanceSimulationRepository extends JpaRepository<AmbulanceSimulation, Long> {
 
@@ -25,4 +27,12 @@ public interface AmbulanceSimulationRepository extends JpaRepository<AmbulanceSi
 
     // Tìm theo mission
     Optional<AmbulanceSimulation> findByMissionId(Integer missionId);
+
+    // ── THÊM MỚI: kiểm tra duplicate theo mission ─────────
+    @Query("SELECT s FROM AmbulanceSimulation s " +
+            "WHERE s.mission.id = :missionId " +
+            "AND s.status IN :statuses")
+    Optional<AmbulanceSimulation> findActivByMissionId(
+            @Param("missionId") Integer missionId,
+            @Param("statuses") Set<SimulationStatus> statuses);
 }
