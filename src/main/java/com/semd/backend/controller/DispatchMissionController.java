@@ -255,6 +255,19 @@ public class DispatchMissionController {
         );
     }
 
+    // ── DISPATCHER: REDISPATCH ─────────────────────────────
+    @PostMapping("/redispatch")
+    @Operation(
+            summary = "Điều xe khác khi driver từ chối",
+            description = "DISPATCHER, ADMIN. Request phải ở trạng thái DISPATCHED"
+    )
+    public ResponseEntity<DispatchMissionResponse> redispatch(
+            @RequestParam Integer requestId,
+            @RequestParam Integer newResourceId) {
+        return ResponseEntity.status(201).body(
+                missionService.redispatch(requestId, newResourceId));
+    }
+
     // ── ENDPOINT CŨ ───────────────────────────────────────
 
     @Deprecated

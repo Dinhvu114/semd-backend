@@ -1,10 +1,10 @@
 package com.semd.backend.service;
 
-import com.semd.backend.dto.request.CancelMissionRequest;
 import com.semd.backend.dto.request.CreateDispatchMissionRequest;
 import com.semd.backend.dto.request.RejectMissionRequest;
 import com.semd.backend.dto.response.DispatchMissionResponse;
 import com.semd.backend.entity.*;
+import com.semd.backend.exception.BusinessConflictException;
 import com.semd.backend.repository.*;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -17,7 +17,7 @@ import java.util.Map;
 @Service
 public class DispatchMissionService {
 
-    // Các status được coi là "đang hoạt động" của mission
+    // Status được coi là đang hoạt động
     private static final List<DispatchMissionStatus> ACTIVE_STATUSES = List.of(
             DispatchMissionStatus.DISPATCHED,
             DispatchMissionStatus.ACCEPTED,
@@ -47,7 +47,7 @@ public class DispatchMissionService {
     }
 
     // ══════════════════════════════════════════════════════
-    // TẠO MISSION — transaction đầy đủ
+    // TẠO MISSION
     // ══════════════════════════════════════════════════════
     @Transactional
     public DispatchMissionResponse create(CreateDispatchMissionRequest req) {
@@ -57,20 +57,20 @@ public class DispatchMissionService {
                 .orElseThrow(() -> new MissionException(404, "REQUEST_NOT_FOUND",
                         "Không tìm thấy dispatch_request id: " + req.getRequestId()));
 
-        // 2. Kiểm tra request đã được xác minh chưa
-        if (request.getStatus() != DispatchRequestStatus.CONFIRMED) {
-            throw new MissionException(409, "REQUEST_NOT_CONFIRMED",
-                    "Request chưa được Dispatcher xác minh, status hiện tại: "
-                            + request.getStatus());
+        // 2. Request phải ở RECOMMENDING (đã qua bước đề xuất xe)
+        if (request.getStatus() != DispatchRequestStatus.RECOMMENDING) {
+            throw new MissionException(409, "REQUEST_NOT_READY_FOR_DISPATCH",
+                    "Request phải ở trạng thái RECOMMENDING trước khi tạo mission. "
+                            + "Trạng thái hiện tại: " + request.getStatus());
         }
 
         // 3. Kiểm tra request chưa có mission đang hoạt động
-        if (missionRepository.existsByRequestId(req.getRequestId())) {
-            throw new MissionException(409, "MISSION_ALREADY_EXISTS",
-                    "Request này đã có mission, không tạo thêm được");
+        if (missionRepository.findActiveMissionByRequestId(req.getRequestId()).isPresent()) {
+            throw new MissionException(409, "ACTIVE_MISSION_ALREADY_EXISTS",
+                    "Request đang có một mission hoạt động");
         }
 
-        // 4. Lấy xe + LOCK để tránh race condition
+        // 4. Lấy xe + LOCK tránh race condition
         DispatchResource resource = resourceRepository
                 .findByIdWithLock(req.getResourceId())
                 .orElseThrow(() -> new MissionException(404, "RESOURCE_NOT_FOUND",
@@ -83,13 +83,16 @@ public class DispatchMissionService {
         }
 
         // 6. Kiểm tra xe chưa có mission đang chạy
-        if (missionRepository.existsByResourceIdAndStatusIn(
-                resource.getId(), ACTIVE_STATUSES)) {
+        if (missionRepository.existsByResourceIdAndStatusIn(resource.getId(), ACTIVE_STATUSES)) {
             throw new MissionException(409, "RESOURCE_HAS_ACTIVE_MISSION",
                     "Xe đang có nhiệm vụ chưa hoàn thành");
         }
 
-        // 7. Tạo mission DISPATCHED
+        // 7. Chuyển request sang DISPATCHING (đang trong quá trình giao)
+        request.setStatus(DispatchRequestStatus.DISPATCHING);
+        requestRepository.save(request);
+
+        // 8. Tạo mission DISPATCHED
         DispatchMission mission = new DispatchMission();
         mission.setRequest(request);
         mission.setResource(resource);
@@ -99,32 +102,33 @@ public class DispatchMissionService {
         mission.setDispatchedAt(LocalDateTime.now());
         DispatchMission saved = missionRepository.save(mission);
 
-        // 8. Chuyển xe sang BUSY
-        resource.setStatus(DispatchResourceStatus.ON_MISSION);
+        // 9. Chuyển xe sang DISPATCHED (chờ driver xác nhận)
+        resource.setStatus(DispatchResourceStatus.DISPATCHED);
         resourceRepository.save(resource);
 
-        // 9. Chuyển request sang DISPATCHED
+        // 10. Chuyển request sang DISPATCHED
         request.setStatus(DispatchRequestStatus.DISPATCHED);
         requestRepository.save(request);
 
-        // 10. Ghi audit log
+        // 11. Ghi audit log
         saveLog(saved, null, DispatchMissionStatus.DISPATCHED,
                 "Tạo nhiệm vụ, điều xe: " + resource.getResourceCode());
 
-        // 11. Gửi WebSocket SAU KHI transaction thành công
+        // 12. Gửi WebSocket
         notifyDispatcher("NEW_MISSION", saved,
                 "Nhiệm vụ mới được tạo cho xe " + resource.getResourceCode());
-        Integer driverId = resource.getCurrentDriver() != null
-                ? resource.getCurrentDriver().getId()
-                : null;
-        notifyDriver(driverId, "MISSION_ASSIGNED", saved,
-                "Bạn vừa được phân công nhiệm vụ mới!");
+
+        User currentDriver = resource.getCurrentDriver();
+        if (currentDriver != null) {
+            notifyDriver(currentDriver.getId(), "MISSION_ASSIGNED", saved,
+                    "Bạn vừa được phân công nhiệm vụ mới!");
+        }
 
         return toResponse(saved);
     }
 
     // ══════════════════════════════════════════════════════
-    // GET — Xem chi tiết và danh sách
+    // GET
     // ══════════════════════════════════════════════════════
     public DispatchMissionResponse getById(Integer id) {
         return toResponse(findOrThrow(id));
@@ -141,8 +145,17 @@ public class DispatchMissionService {
     @Transactional
     public DispatchMissionResponse accept(Integer missionId) {
         DispatchMission mission = lockOrThrow(missionId);
-
         assertStatus(mission, DispatchMissionStatus.DISPATCHED, "accept");
+
+        // Kiểm tra và cập nhật resource
+        DispatchResource resource = mission.getResource();
+        if (resource.getStatus() != DispatchResourceStatus.DISPATCHED) {
+            throw new MissionException(409, "INVALID_RESOURCE_STATUS",
+                    "Resource phải ở trạng thái DISPATCHED trước khi nhận nhiệm vụ. "
+                            + "Trạng thái hiện tại: " + resource.getStatus());
+        }
+        resource.setStatus(DispatchResourceStatus.ON_MISSION);
+        resourceRepository.save(resource);
 
         mission.setStatus(DispatchMissionStatus.ACCEPTED);
         mission.setAcceptedAt(LocalDateTime.now());
@@ -151,8 +164,7 @@ public class DispatchMissionService {
         saveLog(saved, DispatchMissionStatus.DISPATCHED,
                 DispatchMissionStatus.ACCEPTED, "Driver đã nhận nhiệm vụ");
 
-        notifyDispatcher("MISSION_ACCEPTED", saved,
-                "Driver đã xác nhận nhận nhiệm vụ");
+        notifyDispatcher("MISSION_ACCEPTED", saved, "Driver đã xác nhận nhận nhiệm vụ");
 
         return toResponse(saved);
     }
@@ -163,7 +175,6 @@ public class DispatchMissionService {
     @Transactional
     public DispatchMissionResponse reject(Integer missionId, RejectMissionRequest req) {
         DispatchMission mission = lockOrThrow(missionId);
-
         assertStatus(mission, DispatchMissionStatus.DISPATCHED, "reject");
 
         mission.setStatus(DispatchMissionStatus.REJECTED);
@@ -185,12 +196,11 @@ public class DispatchMissionService {
     }
 
     // ══════════════════════════════════════════════════════
-    // DRIVER: START (bắt đầu di chuyển)
+    // DRIVER: START → EN_ROUTE
     // ══════════════════════════════════════════════════════
     @Transactional
     public DispatchMissionResponse start(Integer missionId) {
         DispatchMission mission = lockOrThrow(missionId);
-
         assertStatus(mission, DispatchMissionStatus.ACCEPTED, "start");
 
         mission.setStatus(DispatchMissionStatus.EN_ROUTE);
@@ -200,8 +210,7 @@ public class DispatchMissionService {
         saveLog(saved, DispatchMissionStatus.ACCEPTED,
                 DispatchMissionStatus.EN_ROUTE, "Driver bắt đầu di chuyển đến hiện trường");
 
-        notifyDispatcher("MISSION_EN_ROUTE", saved,
-                "Xe đang trên đường đến hiện trường");
+        notifyDispatcher("MISSION_EN_ROUTE", saved, "Xe đang trên đường đến hiện trường");
 
         return toResponse(saved);
     }
@@ -212,7 +221,6 @@ public class DispatchMissionService {
     @Transactional
     public DispatchMissionResponse arriveScene(Integer missionId) {
         DispatchMission mission = lockOrThrow(missionId);
-
         assertStatus(mission, DispatchMissionStatus.EN_ROUTE, "arrive-scene");
 
         mission.setStatus(DispatchMissionStatus.ARRIVED_SCENE);
@@ -228,12 +236,11 @@ public class DispatchMissionService {
     }
 
     // ══════════════════════════════════════════════════════
-    // DRIVER: START TRANSPORT (bắt đầu chở bệnh nhân)
+    // DRIVER: START TRANSPORT
     // ══════════════════════════════════════════════════════
     @Transactional
     public DispatchMissionResponse startTransport(Integer missionId) {
         DispatchMission mission = lockOrThrow(missionId);
-
         assertStatus(mission, DispatchMissionStatus.ARRIVED_SCENE, "start-transport");
 
         mission.setStatus(DispatchMissionStatus.TRANSPORTING);
@@ -243,8 +250,7 @@ public class DispatchMissionService {
         saveLog(saved, DispatchMissionStatus.ARRIVED_SCENE,
                 DispatchMissionStatus.TRANSPORTING, "Bắt đầu chở bệnh nhân đến bệnh viện");
 
-        notifyDispatcher("MISSION_TRANSPORTING", saved,
-                "Xe đang chở bệnh nhân đến bệnh viện");
+        notifyDispatcher("MISSION_TRANSPORTING", saved, "Xe đang chở bệnh nhân đến bệnh viện");
 
         return toResponse(saved);
     }
@@ -255,7 +261,6 @@ public class DispatchMissionService {
     @Transactional
     public DispatchMissionResponse arriveHospital(Integer missionId) {
         DispatchMission mission = lockOrThrow(missionId);
-
         assertStatus(mission, DispatchMissionStatus.TRANSPORTING, "arrive-hospital");
 
         mission.setStatus(DispatchMissionStatus.ARRIVED_HOSPITAL);
@@ -276,24 +281,25 @@ public class DispatchMissionService {
     @Transactional
     public DispatchMissionResponse complete(Integer missionId) {
         DispatchMission mission = lockOrThrow(missionId);
-
         assertStatus(mission, DispatchMissionStatus.ARRIVED_HOSPITAL, "complete");
 
         mission.setStatus(DispatchMissionStatus.COMPLETED);
         mission.setCompletedAt(LocalDateTime.now());
         DispatchMission saved = missionRepository.save(mission);
 
-        // Giải phóng xe về AVAILABLE
+        // Giải phóng xe
         DispatchResource resource = mission.getResource();
         resource.setStatus(DispatchResourceStatus.AVAILABLE);
         resourceRepository.save(resource);
 
         // Đóng request
-        mission.getRequest().setStatus(DispatchRequestStatus.COMPLETED);
-        requestRepository.save(mission.getRequest());
+        DispatchRequest request = mission.getRequest();
+        request.setStatus(DispatchRequestStatus.COMPLETED);
+        requestRepository.save(request);
 
         saveLog(saved, DispatchMissionStatus.ARRIVED_HOSPITAL,
-                DispatchMissionStatus.COMPLETED, "Hoàn thành nhiệm vụ, xe đã được giải phóng");
+                DispatchMissionStatus.COMPLETED,
+                "Hoàn thành nhiệm vụ, xe đã được giải phóng");
 
         notifyDispatcher("MISSION_COMPLETED", saved,
                 "Nhiệm vụ hoàn thành. Xe " + resource.getResourceCode() + " đã sẵn sàng");
@@ -302,8 +308,100 @@ public class DispatchMissionService {
     }
 
     // ══════════════════════════════════════════════════════
-    // HELPER METHODS
+    // DISPATCHER: REDISPATCH — điều xe khác khi driver từ chối
     // ══════════════════════════════════════════════════════
+    @Transactional
+    public DispatchMissionResponse redispatch(Integer requestId, Integer newResourceId) {
+
+        // 1. Lấy request
+        DispatchRequest request = requestRepository.findById(requestId)
+                .orElseThrow(() -> new MissionException(404, "REQUEST_NOT_FOUND",
+                        "Không tìm thấy request id: " + requestId));
+
+        // 2. Chỉ redispatch khi request đang DISPATCHED
+        if (request.getStatus() != DispatchRequestStatus.DISPATCHED) {
+            throw new BusinessConflictException(
+                    "Chỉ request ở trạng thái DISPATCHED mới được điều phối lại. "
+                            + "Trạng thái hiện tại: " + request.getStatus());
+        }
+
+        // 3. Huỷ mission cũ nếu còn active
+        missionRepository.findActiveMissionByRequestId(requestId).ifPresent(oldMission -> {
+            DispatchMissionStatus oldStatus = oldMission.getStatus(); // lưu trước khi đổi
+
+            oldMission.setStatus(DispatchMissionStatus.CANCELLED);
+            missionRepository.save(oldMission);
+
+            // Giải phóng xe cũ
+            DispatchResource oldResource = oldMission.getResource();
+            oldResource.setStatus(DispatchResourceStatus.AVAILABLE);
+            resourceRepository.save(oldResource);
+
+            // Log đúng oldStatus
+            saveLog(oldMission, oldStatus, DispatchMissionStatus.CANCELLED,
+                    "Huỷ để điều xe mới");
+        });
+
+        // 4. Lấy xe mới + LOCK
+        DispatchResource newResource = resourceRepository
+                .findByIdWithLock(newResourceId)
+                .orElseThrow(() -> new MissionException(404, "RESOURCE_NOT_FOUND",
+                        "Không tìm thấy xe id: " + newResourceId));
+
+        if (newResource.getStatus() != DispatchResourceStatus.AVAILABLE) {
+            throw new MissionException(409, "RESOURCE_NOT_AVAILABLE",
+                    "Xe mới đang bận, status: " + newResource.getStatus());
+        }
+
+        // 5. Tạo mission mới
+        DispatchMission newMission = new DispatchMission();
+        newMission.setRequest(request);
+        newMission.setResource(newResource);
+        newMission.setStatus(DispatchMissionStatus.DISPATCHED);
+        newMission.setDispatchedAt(LocalDateTime.now()); // timestamp đầy đủ
+        DispatchMission saved = missionRepository.save(newMission);
+
+        // 6. Cập nhật xe mới
+        newResource.setStatus(DispatchResourceStatus.DISPATCHED);
+        resourceRepository.save(newResource);
+
+        // 7. Request giữ DISPATCHED (self-transition)
+        request.setStatus(DispatchRequestStatus.DISPATCHED);
+        requestRepository.save(request);
+
+        // 8. Log
+        saveLog(saved, null, DispatchMissionStatus.DISPATCHED,
+                "Điều xe mới: " + newResource.getResourceCode());
+
+        // 9. WebSocket
+        notifyDispatcher("MISSION_REDISPATCHED", saved,
+                "Đã điều xe mới: " + newResource.getResourceCode());
+
+        User newDriver = newResource.getCurrentDriver();
+        if (newDriver != null) {
+            notifyDriver(newDriver.getId(), "MISSION_ASSIGNED", saved,
+                    "Bạn vừa được phân công nhiệm vụ mới!");
+        }
+
+        return toResponse(saved);
+    }
+
+    // ══════════════════════════════════════════════════════
+    // HELPER — giữ lại updateStatus cho tương thích endpoint cũ
+    // ══════════════════════════════════════════════════════
+    public DispatchMissionResponse updateStatus(Integer missionId, String newStatus) {
+        return switch (newStatus) {
+            case "ACCEPTED"          -> accept(missionId);
+            case "EN_ROUTE"          -> start(missionId);
+            case "ARRIVED_SCENE"     -> arriveScene(missionId);
+            case "TRANSPORTING"      -> startTransport(missionId);
+            case "ARRIVED_HOSPITAL"  -> arriveHospital(missionId);
+            case "COMPLETED"         -> complete(missionId);
+            default -> throw new MissionException(400, "INVALID_STATUS",
+                    "Trạng thái không hợp lệ: " + newStatus);
+        };
+    }
+
     private DispatchMission findOrThrow(Integer id) {
         return missionRepository.findById(id)
                 .orElseThrow(() -> new MissionException(404, "MISSION_NOT_FOUND",
@@ -387,7 +485,7 @@ public class DispatchMissionService {
         return res;
     }
 
-    // Exception nội bộ để trả đúng HTTP status
+    // Exception nội bộ
     public static class MissionException extends RuntimeException {
         private final int httpStatus;
         private final String errorCode;
@@ -400,19 +498,5 @@ public class DispatchMissionService {
 
         public int getHttpStatus() { return httpStatus; }
         public String getErrorCode() { return errorCode; }
-    }
-
-    // Giữ lại để tương thích với endpoint cũ
-    public DispatchMissionResponse updateStatus(Integer missionId, String newStatus) {
-        return switch (newStatus) {
-            case "ACCEPTED"         -> accept(missionId);
-            case "EN_ROUTE"         -> start(missionId);
-            case "ARRIVED_SCENE"    -> arriveScene(missionId);
-            case "TRANSPORTING"     -> startTransport(missionId);
-            case "ARRIVED_HOSPITAL" -> arriveHospital(missionId);
-            case "COMPLETED"        -> complete(missionId);
-            default -> throw new MissionException(400, "INVALID_STATUS",
-                    "Trạng thái không hợp lệ: " + newStatus);
-        };
     }
 }
