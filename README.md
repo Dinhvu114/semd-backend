@@ -130,3 +130,56 @@ application-local.yml
 - [ ] Không có `System.out.println` thừa
 - [ ] Đã test API trên Swagger UI
 
+## 9. Hướng dẫn chạy Redis bằng Docker (Để đăng nhập & lưu Session)
+
+Hệ thống sử dụng **Redis** để quản lý session và token đăng nhập thời gian thực. Thành viên trong nhóm có thể khởi chạy nhanh Redis bằng Docker theo hướng dẫn sau:
+
+1. **Yêu cầu:** Máy tính đã cài đặt và đang chạy **Docker Desktop**.
+2. **Tải (Pull) Redis Image mới nhất:**
+   ```bash
+   docker pull redis:latest
+   ```
+3. **Khởi chạy Container Redis:**
+   Chạy lệnh sau để tạo và chạy container Redis ở cổng mặc định `6379` không có mật khẩu (tương thích với cấu hình mặc định của Spring Boot):
+   ```bash
+   docker run --name semd-redis -p 6379:6379 -d redis:latest
+   ```
+4. **Kiểm tra trạng thái Container:**
+   ```bash
+   docker ps
+   ```
+   Nếu thấy container `semd-redis` đang ở trạng thái `Up`, Spring Boot sẽ tự động nhận diện và kết nối thành công khi khởi động.
+5. **Dừng/Chạy lại Redis khi cần thiết:**
+   * Dừng container: `docker stop semd-redis`
+   * Chạy lại container: `docker start semd-redis`
+
+## 10. Các máy trạng thái##
+1. DispatchRequest:
+* Luồng chính:
+PENDING -> CONFIRMED -> RECOMMENDING -> DISPATCHING -> DISPATCHED -> COMPLETED
+(chờ duyệt -> xác nhận -> hệ thống đề xuất -> đang giao nhiệm vụ -> đã giao nhiệm vụ -> hoàn thành)
+* Ngoại lệ:
+REJECTED: yêu cầu bị điều phối viên xác nhận là không hợp lệ
+CANCELLED: yêu cầu đã bị hủy
+FAILED: yêu cầu điều phối thất bại do hệ thống/nghiệp vụ
+2. DispatchMission:
+* Luồng chính:
+DISPATCHED -> ACCEPTED -> EN_ROUTE -> ARRIVED_SCENE -> TRANSPORTING -> ARRIVED_HOSPITAL -> COMPLETED
+(đã giao nhiệm vụ -> tài xế chấp nhận -> trên đường -> tới hiện trường -> đang vận chuyển -> đã đến đích -> hoàn thành)
+* Ngoại lệ
+REJECTED: tài xế từ chối nhiệm vụ
+TIMEOUT: hết giờ
+CANCELLED: nhiệm vụ bị hủy
+FAILED: nhiệm vụ thất bại
+3. DispatchResource:
+* Luồng chính:
+AVAILABLE -> DISPATCHED -> ON_MISSION -> RETURNING
+(sẵn sàng -> đã giao nhiệm vụ -> đang thực hiện nhiệm vụ -> đang trở về)
+trạng thái RETURNING chưa cần sử dụng ngay
+OFFLINE
+MAINTENANCE
+OUT_OF_SERVICE
+
+## Lưu ý: DispatchRequest.REJECTED KHÁC DispatchMission.REJECTED ##
+* (Yêu cầu bị từ chối bởi điều phối KHÁC tài xế từ chối nhiệm vụ)
+operationZone đổi từ edgeNode, zoneId đổi từ edgeNodeId
