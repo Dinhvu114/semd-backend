@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface DispatchRequestRepository extends JpaRepository<DispatchRequest, Integer>, JpaSpecificationExecutor<DispatchRequest> {
@@ -22,6 +23,8 @@ public interface DispatchRequestRepository extends JpaRepository<DispatchRequest
     List<DispatchRequest> findByStatusAndOperationZoneId(DispatchRequestStatus status, Integer zoneId, Sort sort);
 
     long countByStatus(DispatchRequestStatus status);
+
+    Optional<DispatchRequest> findFirstByCallIdOrderByCreatedAtDesc(Integer callId);
 
     @Query("SELECT COUNT(r) FROM DispatchRequest r WHERE r.status = :status AND r.createdAt >= :from")
     long countByStatusAndCreatedAtAfter(@Param("status") DispatchRequestStatus status,

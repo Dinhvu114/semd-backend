@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.semd.backend.repository.DispatchRequestRepository;
 import com.semd.backend.repository.ServiceTypeRepository;
 import com.semd.backend.repository.OperationZoneRepository;
+import com.semd.backend.dto.emergencyCall.EmergencyCallResponse;
 import java.util.List;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -54,13 +55,15 @@ public class EmergencyCallService {
     }
 
     @Transactional
-    public EmergencyCall createEmergencySosCall(String reporterPhone, String reporterName, Double latitude, Double longitude) {
+    public EmergencyCallResponse createEmergencySosCall(String reporterPhone, String reporterName, Double latitude,
+                                                         Double longitude, String description) {
         EmergencyCall call = new EmergencyCall();
         call.setReporterPhone(reporterPhone);
         call.setReporterName(reporterName);
         call.setCallStartTime(LocalDateTime.now());
         call.setCallType(EmergencyCallType.SOS);
-        call.setStatus(EmergencyCallStatus.CONFIRMED);
+        call.setStatus(EmergencyCallStatus.RECEIVED);
+        call.setDescription(normalizeDescription(description));
         
         if (longitude != null && latitude != null) {
             call.setLocation(geometryFactory.createPoint(new Coordinate(longitude, latitude)));
@@ -91,13 +94,13 @@ public class EmergencyCallService {
         request.setUrgencyLevel("CRITICAL"); // Đặt mặc định mức khẩn cấp CRITICAL cho SOS nhanh
         request.setTargetLocation(savedCall.getLocation());
         request.setStatus(DispatchRequestStatus.PENDING);
-        dispatchRequestRepository.save(request);
+        DispatchRequest savedRequest = dispatchRequestRepository.save(request);
 
         // Phát tán WebSocket tới điều phối viên
         messagingTemplate.convertAndSend("/topic/calls", savedCall);
         messagingTemplate.convertAndSend("/topic/dispatches", request); // Gửi thêm kênh dispatches cho Dashboard
 
-        return savedCall;
+        return toResponse(savedCall, savedRequest);
     }
 
 
@@ -105,7 +108,8 @@ public class EmergencyCallService {
      * Nhận yêu cầu cuộc gọi thoại khẩn cấp kèm định vị từ người dân.
      */
     @Transactional
-    public EmergencyCall createEmergencyVoiceCall(String reporterPhone, String reporterName, Double latitude, Double longitude, String audioObjectKey) {
+    public EmergencyCallResponse createEmergencyVoiceCall(String reporterPhone, String reporterName, Double latitude,
+                                                           Double longitude, String audioObjectKey, String description) {
         // 1. Lấy URL công khai của file từ object key
         String audioUrl = fileStorageService.getPublicUrl(audioObjectKey);
 
@@ -117,6 +121,7 @@ public class EmergencyCallService {
         call.setAudioUrl(audioUrl);
         call.setCallType(EmergencyCallType.CALL);
         call.setStatus(EmergencyCallStatus.RECEIVED);
+        call.setDescription(normalizeDescription(description));
         
         if (longitude != null && latitude != null) {
             call.setLocation(geometryFactory.createPoint(new Coordinate(longitude, latitude)));
@@ -133,7 +138,7 @@ public class EmergencyCallService {
         // Phát tán WebSocket tới điều phối viên
         messagingTemplate.convertAndSend("/topic/calls", savedCall);
 
-        return savedCall;
+        return toResponse(savedCall, null);
     }
 
 
@@ -160,6 +165,7 @@ public class EmergencyCallService {
         data.put("callType", call.getCallType().name());
         data.put("status", call.getStatus().name());
         data.put("audioUrl", call.getAudioUrl());
+        data.put("description", call.getDescription());
         data.put("longitude", longitude);
         data.put("latitude", latitude);
         data.put("createdAt", call.getCreatedAt() != null ? call.getCreatedAt().toString() : null);
@@ -243,16 +249,52 @@ public class EmergencyCallService {
         return updatedCall;
     }
 
-    public List<EmergencyCall> getMyCalls(String reporterPhone) {
-        return callRepository.findByReporterPhoneOrderByCallStartTimeDesc(reporterPhone);
+    public List<EmergencyCallResponse> getMyCalls(String reporterPhone) {
+        return callRepository.findByReporterPhoneOrderByCallStartTimeDesc(reporterPhone).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
-    public java.util.Optional<EmergencyCall> getCallDetails(Integer id) {
-        return callRepository.findById(id);
+    public java.util.Optional<EmergencyCallResponse> getCallDetails(Integer id) {
+        return callRepository.findById(id).map(this::toResponse);
     }
 
     public java.util.Optional<EmergencyCall> getCallByAudioObjectKey(String objectKey) {
         return callRepository.findFirstByAudioUrlContaining(objectKey);
+    }
+
+    private EmergencyCallResponse toResponse(EmergencyCall call) {
+        DispatchRequest request = dispatchRequestRepository
+                .findFirstByCallIdOrderByCreatedAtDesc(call.getId())
+                .orElse(null);
+        return toResponse(call, request);
+    }
+
+    private EmergencyCallResponse toResponse(EmergencyCall call, DispatchRequest request) {
+        return new EmergencyCallResponse(
+                call.getId(),
+                request != null ? request.getId() : null,
+                call.getCallType().name(),
+                call.getStatus().name(),
+                request != null ? request.getStatus().name() : null,
+                call.getDescription(),
+                call.getReporterName(),
+                call.getReporterPhone(),
+                call.getAudioUrl(),
+                call.getAiTranscript(),
+                call.getAiUrgencyPrediction(),
+                call.getAiConfidenceScore(),
+                call.getLatitude(),
+                call.getLongitude(),
+                call.getCreatedAt()
+        );
+    }
+
+    private String normalizeDescription(String description) {
+        if (description == null || description.isBlank()) {
+            return null;
+        }
+        return description.trim();
     }
 }
 

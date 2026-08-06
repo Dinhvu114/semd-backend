@@ -33,6 +33,9 @@ public class EmergencyCall {
     @Column(name = "audio_url", length = 512)
     private String audioUrl;
 
+    @Column(name = "description", columnDefinition = "text")
+    private String description;
+
     @Column(name = "ai_transcript", columnDefinition = "text")
     private String aiTranscript;
 
@@ -78,6 +81,9 @@ public class EmergencyCall {
 
     public String getAudioUrl() { return audioUrl; }
     public void setAudioUrl(String audioUrl) { this.audioUrl = audioUrl; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
 
     public String getAiTranscript() { return aiTranscript; }
     public void setAiTranscript(String aiTranscript) { this.aiTranscript = aiTranscript; }
