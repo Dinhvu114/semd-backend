@@ -10,9 +10,17 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
+import java.util.Locale;
+import java.util.Set;
 
 @Service
 public class FileStorageService {
+
+    private static final long MAX_UPLOAD_SIZE = 25L * 1024 * 1024;
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
+            ".aac", ".m4a", ".mp3", ".mp4", ".ogg", ".wav", ".webm",
+            ".jpg", ".jpeg", ".png", ".webp"
+    );
 
     private final MinioClient minioClient;
 
@@ -32,10 +40,11 @@ public class FileStorageService {
      * @return FileUploadResponse chứa objectKey, contentType và size
      */
     public FileUploadResponse uploadFile(MultipartFile file) {
+        validateUpload(file);
         try {
             // Định dạng đường dẫn dạng: emergency-calls/yyyy/MM/dd/uuid.ext
             String datePath = DateTimeFormatter.ofPattern("yyyy/MM/dd").format(LocalDate.now());
-            String originalExtension = getFileExtension(file.getOriginalFilename());
+            String originalExtension = getFileExtension(file.getOriginalFilename()).toLowerCase(Locale.ROOT);
             String uniqueFileName = UUID.randomUUID() + originalExtension;
             String objectKey = "emergency-calls/" + datePath + "/" + uniqueFileName;
 
@@ -45,15 +54,38 @@ public class FileStorageService {
                             .bucket(bucketName)
                             .object(objectKey)
                             .stream(file.getInputStream(), file.getSize(), -1)
-                            .contentType(file.getContentType())
+                            .contentType(resolveContentType(file))
                             .build()
             );
 
-            return new FileUploadResponse(objectKey, file.getContentType(), file.getSize());
+            return new FileUploadResponse(objectKey, resolveContentType(file), file.getSize());
 
         } catch (Exception e) {
             throw new RuntimeException("Upload file thất bại: " + e.getMessage());
         }
+    }
+
+    private void validateUpload(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("File upload không được để trống");
+        }
+        if (file.getSize() > MAX_UPLOAD_SIZE) {
+            throw new IllegalArgumentException("File upload không được vượt quá 25 MB");
+        }
+
+        String extension = getFileExtension(file.getOriginalFilename()).toLowerCase(Locale.ROOT);
+        String contentType = resolveContentType(file);
+        boolean supportedMimeType = contentType.startsWith("audio/") || contentType.startsWith("image/");
+        boolean genericMimeWithKnownExtension = "application/octet-stream".equals(contentType)
+                && ALLOWED_EXTENSIONS.contains(extension);
+        if (!ALLOWED_EXTENSIONS.contains(extension) || (!supportedMimeType && !genericMimeWithKnownExtension)) {
+            throw new IllegalArgumentException("Chỉ hỗ trợ file âm thanh hoặc hình ảnh hợp lệ");
+        }
+    }
+
+    private String resolveContentType(MultipartFile file) {
+        String contentType = file.getContentType();
+        return contentType == null || contentType.isBlank() ? "application/octet-stream" : contentType;
     }
 
     /**

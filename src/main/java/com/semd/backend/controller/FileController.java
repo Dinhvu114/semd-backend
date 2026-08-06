@@ -29,11 +29,11 @@ public class FileController {
     @PostMapping(value = "/upload", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Upload file", description = "Upload file âm thanh hoặc ảnh lên MinIO")
-    public ResponseEntity<com.semd.backend.dto.FileUploadResponse> upload(
+    public ResponseEntity<BaseResponse<com.semd.backend.dto.FileUploadResponse>> upload(
             @RequestPart("file") MultipartFile file) {
 
         com.semd.backend.dto.FileUploadResponse response = fileStorageService.uploadFile(file);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(BaseResponse.success("Upload file thành công", response));
     }
 
     @GetMapping
@@ -119,4 +119,4 @@ public class FileController {
         fileStorageService.deleteFile(objectKey);
         return ResponseEntity.ok(BaseResponse.success(null));
     }
-}
+}
