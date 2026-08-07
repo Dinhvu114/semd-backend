@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -37,9 +38,10 @@ public class DispatchMissionController {
     // ── TẠO MISSION ───────────────────────────────────────
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN, DISPATCHER')")
     @Operation(
             summary = "Tạo lệnh điều xe mới",
-            description = "DISPATCHER/ADMIN. Request phải ở trạng thái CONFIRMED"
+            description = "DISPATCHER/ADMIN. Request phải ở trạng thái RECOMMENDING"
     )
     public ResponseEntity<?> create(
             @Valid @RequestBody CreateDispatchMissionRequest request,
@@ -78,6 +80,7 @@ public class DispatchMissionController {
     // ── XEM DANH SÁCH + CHI TIẾT ──────────────────────────
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN, DISPATCHER, DRIVER')")
     @Operation(
             summary = "Danh sách tất cả nhiệm vụ",
             description = "DISPATCHER/ADMIN/DRIVER"
@@ -92,6 +95,7 @@ public class DispatchMissionController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN, DISPATCHER, DRIVER')")
     @Operation(summary = "Chi tiết một nhiệm vụ")
     public ResponseEntity<BaseResponse<DispatchMissionResponse>> getById(
             @PathVariable Integer id
@@ -107,6 +111,7 @@ public class DispatchMissionController {
     // ── DRIVER: NHẬN / TỪ CHỐI ────────────────────────────
 
     @PostMapping("/{id}/accept")
+    @PreAuthorize("hasAnyRole('DRIVER')")
     @Operation(
             summary = "Driver xác nhận nhận nhiệm vụ",
             description = "DRIVER. Mission phải ở trạng thái DISPATCHED"
@@ -127,6 +132,7 @@ public class DispatchMissionController {
     }
 
     @PostMapping("/{id}/reject")
+    @PreAuthorize("hasRole('DRIVER')")
     @Operation(
             summary = "Driver từ chối nhiệm vụ",
             description = """
@@ -153,6 +159,7 @@ public class DispatchMissionController {
     // ── DRIVER: CẬP NHẬT HÀNH TRÌNH ──────────────────────
 
     @PostMapping("/{id}/start")
+    @PreAuthorize("hasRole('DRIVER')")
     @Operation(
             summary = "Driver bắt đầu di chuyển đến hiện trường",
             description = "DRIVER. Mission phải ở trạng thái ACCEPTED"
@@ -173,6 +180,7 @@ public class DispatchMissionController {
     }
 
     @PostMapping("/{id}/arrive-scene")
+    @PreAuthorize("hasRole('DRIVER')")
     @Operation(
             summary = "Driver báo đã đến hiện trường",
             description = "DRIVER. Mission phải ở trạng thái EN_ROUTE"
@@ -193,6 +201,7 @@ public class DispatchMissionController {
     }
 
     @PostMapping("/{id}/start-transport")
+    @PreAuthorize("hasRole('DRIVER')")
     @Operation(
             summary = "Driver bắt đầu chở bệnh nhân",
             description = "DRIVER. Mission phải ở trạng thái ARRIVED_SCENE"
@@ -213,6 +222,7 @@ public class DispatchMissionController {
     }
 
     @PostMapping("/{id}/arrive-hospital")
+    @PreAuthorize("hasRole('DRIVER')")
     @Operation(
             summary = "Driver báo đã đến bệnh viện",
             description = "DRIVER. Mission phải ở trạng thái TRANSPORTING"
@@ -233,6 +243,7 @@ public class DispatchMissionController {
     }
 
     @PostMapping("/{id}/complete")
+    @PreAuthorize("hasRole('DRIVER')")
     @Operation(
             summary = "Hoàn thành nhiệm vụ — đóng ca, giải phóng xe",
             description = """
@@ -257,41 +268,49 @@ public class DispatchMissionController {
 
     // ── DISPATCHER: REDISPATCH ─────────────────────────────
     @PostMapping("/redispatch")
+    @PreAuthorize("hasAnyRole('ADMIN, DISPATCHER')")
     @Operation(
             summary = "Điều xe khác khi driver từ chối",
             description = "DISPATCHER, ADMIN. Request phải ở trạng thái DISPATCHED"
     )
-    public ResponseEntity<DispatchMissionResponse> redispatch(
+    public ResponseEntity<BaseResponse<DispatchMissionResponse>> redispatch(
             @RequestParam Integer requestId,
             @RequestParam Integer newResourceId) {
-        return ResponseEntity.status(201).body(
-                missionService.redispatch(requestId, newResourceId));
-    }
+        DispatchMissionResponse result =
+            missionService.redispatch(requestId, newResourceId);
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(BaseResponse.success(
+                        201,
+                        "Điều phối lại thành công",
+                        result
+                ));
+        }
 
     // ── ENDPOINT CŨ ───────────────────────────────────────
 
-    @Deprecated
-    @PatchMapping("/{missionId}/status")
-    @Operation(
-            summary = "[Deprecated] Cập nhật trạng thái mission",
-            description = """
-                    Endpoint cũ, chỉ giữ để tương thích.
-                    Hãy sử dụng các endpoint chuyển trạng thái riêng.
-                    """
-    )
-    public ResponseEntity<BaseResponse<DispatchMissionResponse>> updateStatus(
-            @PathVariable Integer missionId,
-            @RequestParam String status
-    ) {
-        DispatchMissionResponse result =
-                missionService.updateStatus(missionId, status);
+//     @Deprecated
+//     @PatchMapping("/{missionId}/status")
+//     @Operation(
+//             summary = "[Deprecated] Cập nhật trạng thái mission",
+//             description = """
+//                     Endpoint cũ, chỉ giữ để tương thích.
+//                     Hãy sử dụng các endpoint chuyển trạng thái riêng.
+//                     """
+//     )
+//     public ResponseEntity<BaseResponse<DispatchMissionResponse>> updateStatus(
+//             @PathVariable Integer missionId,
+//             @RequestParam String status
+//     ) {
+//         DispatchMissionResponse result =
+//                 missionService.updateStatus(missionId, status);
 
-        return ResponseEntity.ok(
-                BaseResponse.success(
-                        HttpStatus.OK.value(),
-                        "Cập nhật trạng thái nhiệm vụ thành công",
-                        result
-                )
-        );
-    }
+//         return ResponseEntity.ok(
+//                 BaseResponse.success(
+//                         HttpStatus.OK.value(),
+//                         "Cập nhật trạng thái nhiệm vụ thành công",
+//                         result
+//                 )
+//         );
+//     }
 }

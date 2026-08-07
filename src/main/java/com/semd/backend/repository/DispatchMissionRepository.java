@@ -20,7 +20,7 @@ public interface DispatchMissionRepository extends JpaRepository<DispatchMission
     List<DispatchMission> findAllByRequestId(Integer requestId);
 
     @Query("SELECT m FROM DispatchMission m WHERE m.request.id = :requestId " +
-           "AND m.status NOT IN ('COMPLETED', 'CANCELLED', 'FAILED', 'TIMEOUT', 'DECLINED')")
+           "AND m.status NOT IN ('COMPLETED', 'CANCELLED', 'FAILED', 'TIMEOUT', 'REJECTED')")
     Optional<DispatchMission> findActiveMissionByRequestId(@Param("requestId") Integer requestId);
 
     long countByRequestId(Integer requestId);
@@ -40,7 +40,7 @@ public interface DispatchMissionRepository extends JpaRepository<DispatchMission
     Optional<DispatchMission> findByIdWithLock(@Param("id") Integer id);
 
     @Query("SELECT m FROM DispatchMission m " +
-            "WHERE m.resource.currentDriver = :driverId " +
+            "WHERE m.resource.currentDriver.id = :driverId " +
             "AND m.status NOT IN ('COMPLETED','CANCELLED','REJECTED')")
     List<DispatchMission> findActiveMissionsByDriverId(@Param("driverId") Integer driverId);
 
