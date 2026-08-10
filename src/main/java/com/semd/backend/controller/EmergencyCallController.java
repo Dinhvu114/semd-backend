@@ -138,17 +138,29 @@ public class EmergencyCallController {
         if (principal == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        EmergencyCallResponse call = callService.getCallDetails(id)
-                .orElseThrow(() -> new com.semd.backend.exception.ResourceNotFoundException("Không tìm thấy cuộc gọi ID: " + id));
-
-        // Phân quyền: Chỉ cho phép chính chủ xem cuộc gọi của họ, trừ khi là ADMIN hoặc DISPATCHER
-        boolean isAdminOrDispatcher = principal.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_DISPATCHER"));
-        if (!isAdminOrDispatcher && !call.reporterPhone().equals(principal.getPhoneNumber())) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(BaseResponse.fail("Bạn không có quyền xem thông tin chi tiết cuộc gọi này", 403));
-        }
-
+        EmergencyCallResponse call = callService.getOwnedCallDetails(id, principal.getPhoneNumber());
         return ResponseEntity.ok(BaseResponse.success(call));
+    }
+
+    @GetMapping("/{id}/status")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Trạng thái xử lý yêu cầu của tôi")
+    public ResponseEntity<BaseResponse<CallStatusResponse>> getCallStatus(
+            @PathVariable Integer id,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(
+                callService.getOwnedCallStatus(id, principal.getPhoneNumber())));
+    }
+
+    @GetMapping("/{id}/tracking")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Theo dõi yêu cầu và xe cấp cứu của tôi")
+    public ResponseEntity<BaseResponse<CallTrackingResponse>> getCallTracking(
+            @PathVariable Integer id,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(
+                callService.getOwnedCallTracking(id, principal.getPhoneNumber())));
     }
 }

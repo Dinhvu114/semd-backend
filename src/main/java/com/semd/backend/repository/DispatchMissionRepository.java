@@ -2,13 +2,11 @@ package com.semd.backend.repository;
 
 import com.semd.backend.entity.DispatchMission;
 import com.semd.backend.entity.DispatchMissionStatus;
-import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.Lock;
 
-import java.util.List;
 import java.util.Optional;
 import jakarta.persistence.LockModeType;
 import java.util.List;
@@ -43,5 +41,21 @@ public interface DispatchMissionRepository extends JpaRepository<DispatchMission
             "WHERE m.resource.currentDriver.id = :driverId " +
             "AND m.status NOT IN ('COMPLETED','CANCELLED','REJECTED')")
     List<DispatchMission> findActiveMissionsByDriverId(@Param("driverId") Integer driverId);
+
+    @Query("SELECT m FROM DispatchMission m " +
+            "WHERE m.resource.currentDriver.id = :driverId ORDER BY m.dispatchedAt DESC")
+    List<DispatchMission> findAllByDriverId(@Param("driverId") Integer driverId);
+
+    @Query("SELECT m FROM DispatchMission m WHERE m.id = :missionId " +
+            "AND m.resource.currentDriver.id = :driverId")
+    Optional<DispatchMission> findByIdAndDriverId(
+            @Param("missionId") Integer missionId,
+            @Param("driverId") Integer driverId);
+
+    @Query("SELECT m FROM DispatchMission m WHERE m.resource.currentDriver.id = :driverId " +
+            "AND m.status IN :statuses ORDER BY m.dispatchedAt DESC")
+    List<DispatchMission> findByDriverIdAndStatusIn(
+            @Param("driverId") Integer driverId,
+            @Param("statuses") List<DispatchMissionStatus> statuses);
 
 }

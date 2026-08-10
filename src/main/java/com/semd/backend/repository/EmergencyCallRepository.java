@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import org.springframework.data.jpa.repository.Query;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface EmergencyCallRepository extends JpaRepository<EmergencyCall, Integer> {
@@ -14,6 +15,8 @@ public interface EmergencyCallRepository extends JpaRepository<EmergencyCall, In
     List<String> findAllAudioUrls();
 
     List<EmergencyCall> findByReporterPhoneOrderByCallStartTimeDesc(String reporterPhone);
+
+    Optional<EmergencyCall> findByIdAndReporterPhone(Integer id, String reporterPhone);
 
     @Query("SELECT c FROM EmergencyCall c WHERE c.audioUrl LIKE %:objectKey%")
     java.util.Optional<EmergencyCall> findFirstByAudioUrlContaining(@org.springframework.data.repository.query.Param("objectKey") String objectKey);

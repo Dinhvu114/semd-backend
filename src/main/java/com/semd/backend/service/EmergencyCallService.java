@@ -15,6 +15,12 @@ import org.springframework.transaction.annotation.Transactional;
 import com.semd.backend.repository.DispatchRequestRepository;
 import com.semd.backend.repository.ServiceTypeRepository;
 import com.semd.backend.repository.OperationZoneRepository;
+import com.semd.backend.repository.DispatchMissionRepository;
+import com.semd.backend.repository.AmbulanceSimulationRepository;
+import com.semd.backend.dto.emergencyCall.CallStatusResponse;
+import com.semd.backend.dto.emergencyCall.CallTrackingResponse;
+import com.semd.backend.dto.response.TrackingResponse;
+import com.semd.backend.exception.ResourceNotFoundException;
 import com.semd.backend.dto.emergencyCall.EmergencyCallResponse;
 import java.util.List;
 import java.math.BigDecimal;
@@ -33,6 +39,9 @@ public class EmergencyCallService {
     private final DispatchRequestRepository dispatchRequestRepository;
     private final ServiceTypeRepository serviceTypeRepository;
     private final OperationZoneRepository operationZoneRepository;
+    private final DispatchMissionRepository missionRepository;
+    private final AmbulanceSimulationRepository simulationRepository;
+    private final AmbulanceJourneyService ambulanceJourneyService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
@@ -43,7 +52,10 @@ public class EmergencyCallService {
                                 SimpMessagingTemplate messagingTemplate,
                                 DispatchRequestRepository dispatchRequestRepository,
                                 ServiceTypeRepository serviceTypeRepository,
-                                OperationZoneRepository operationZoneRepository) {
+                                OperationZoneRepository operationZoneRepository,
+                                DispatchMissionRepository missionRepository,
+                                AmbulanceSimulationRepository simulationRepository,
+                                AmbulanceJourneyService ambulanceJourneyService) {
         this.callRepository = callRepository;
         this.fileStorageService = fileStorageService;
         this.auditLogRepository = auditLogRepository;
@@ -52,6 +64,9 @@ public class EmergencyCallService {
         this.dispatchRequestRepository = dispatchRequestRepository;
         this.serviceTypeRepository = serviceTypeRepository;
         this.operationZoneRepository = operationZoneRepository;
+        this.missionRepository = missionRepository;
+        this.simulationRepository = simulationRepository;
+        this.ambulanceJourneyService = ambulanceJourneyService;
     }
 
     @Transactional
@@ -257,6 +272,86 @@ public class EmergencyCallService {
 
     public java.util.Optional<EmergencyCallResponse> getCallDetails(Integer id) {
         return callRepository.findById(id).map(this::toResponse);
+    }
+
+    public EmergencyCallResponse getOwnedCallDetails(Integer id, String reporterPhone) {
+        return toResponse(findOwnedCall(id, reporterPhone));
+    }
+
+    public CallStatusResponse getOwnedCallStatus(Integer id, String reporterPhone) {
+        EmergencyCall call = findOwnedCall(id, reporterPhone);
+        DispatchRequest request = latestRequest(call.getId());
+        DispatchMission mission = latestMission(request);
+
+        return new CallStatusResponse(
+                call.getId(),
+                call.getStatus().name(),
+                request != null ? request.getId() : null,
+                request != null ? request.getStatus().name() : null,
+                mission != null ? mission.getId() : null,
+                mission != null ? mission.getStatus().name() : null,
+                resolveUpdatedAt(call, request, mission)
+        );
+    }
+
+    public CallTrackingResponse getOwnedCallTracking(Integer id, String reporterPhone) {
+        EmergencyCall call = findOwnedCall(id, reporterPhone);
+        DispatchRequest request = latestRequest(call.getId());
+        DispatchMission mission = latestMission(request);
+        DispatchResource resource = mission != null ? mission.getResource() : null;
+        TrackingResponse tracking = null;
+
+        if (mission != null && simulationRepository.findByMissionId(mission.getId()).isPresent()) {
+            tracking = ambulanceJourneyService.getTrackingByMission(mission.getId());
+        }
+
+        return new CallTrackingResponse(
+                call.getId(),
+                call.getStatus().name(),
+                request != null ? request.getId() : null,
+                request != null ? request.getStatus().name() : null,
+                mission != null ? mission.getId() : null,
+                mission != null ? mission.getStatus().name() : null,
+                resource != null ? resource.getId() : null,
+                resource != null ? resource.getResourceCode() : null,
+                resource != null ? resource.getStatus().name() : null,
+                resource != null && resource.getCurrentLocation() != null ? resource.getCurrentLocation().getX() : null,
+                resource != null && resource.getCurrentLocation() != null ? resource.getCurrentLocation().getY() : null,
+                tracking
+        );
+    }
+
+    private EmergencyCall findOwnedCall(Integer id, String reporterPhone) {
+        return callRepository.findByIdAndReporterPhone(id, reporterPhone)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy cuộc gọi ID: " + id));
+    }
+
+    private DispatchRequest latestRequest(Integer callId) {
+        return dispatchRequestRepository.findFirstByCallIdOrderByCreatedAtDesc(callId).orElse(null);
+    }
+
+    private DispatchMission latestMission(DispatchRequest request) {
+        if (request == null) return null;
+        return missionRepository.findAllByRequestId(request.getId()).stream()
+                .max(java.util.Comparator.comparing(
+                        DispatchMission::getDispatchedAt,
+                        java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                .orElse(null);
+    }
+
+    private LocalDateTime resolveUpdatedAt(EmergencyCall call, DispatchRequest request, DispatchMission mission) {
+        if (mission != null) {
+            LocalDateTime[] timestamps = {
+                    mission.getCompletedAt(), mission.getArrivedHospitalAt(), mission.getStartTransportAt(),
+                    mission.getArrivedSceneAt(), mission.getEnRouteAt(), mission.getAcceptedAt(),
+                    mission.getCancelledAt(), mission.getDispatchedAt()
+            };
+            for (LocalDateTime timestamp : timestamps) {
+                if (timestamp != null) return timestamp;
+            }
+        }
+        if (request != null && request.getCreatedAt() != null) return request.getCreatedAt();
+        return call.getCreatedAt();
     }
 
     public java.util.Optional<EmergencyCall> getCallByAudioObjectKey(String objectKey) {

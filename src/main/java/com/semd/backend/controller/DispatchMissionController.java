@@ -12,6 +12,8 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.semd.backend.security.UserPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -78,6 +80,37 @@ public class DispatchMissionController {
     }
 
     // ── XEM DANH SÁCH + CHI TIẾT ──────────────────────────
+
+    @GetMapping("/me")
+    @PreAuthorize("hasRole('DRIVER')")
+    @Operation(summary = "Lịch sử nhiệm vụ của tài xế đang đăng nhập")
+    public ResponseEntity<BaseResponse<List<DispatchMissionResponse>>> getMyMissions(
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(
+                missionService.getMyMissions(principal.getId())));
+    }
+
+    @GetMapping("/me/active")
+    @PreAuthorize("hasRole('DRIVER')")
+    @Operation(summary = "Các nhiệm vụ đang hoạt động của tài xế")
+    public ResponseEntity<BaseResponse<List<DispatchMissionResponse>>> getMyActiveMissions(
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(
+                missionService.getMyActiveMissions(principal.getId())));
+    }
+
+    @GetMapping("/me/{missionId}")
+    @PreAuthorize("hasRole('DRIVER')")
+    @Operation(summary = "Chi tiết nhiệm vụ thuộc tài xế đang đăng nhập")
+    public ResponseEntity<BaseResponse<DispatchMissionResponse>> getMyMission(
+            @PathVariable Integer missionId,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(
+                missionService.getMyMission(principal.getId(), missionId)));
+    }
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN, DISPATCHER, DRIVER')")

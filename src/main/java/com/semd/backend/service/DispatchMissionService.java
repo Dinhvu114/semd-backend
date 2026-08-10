@@ -139,6 +139,25 @@ public class DispatchMissionService {
                 .stream().map(this::toResponse).toList();
     }
 
+    public List<DispatchMissionResponse> getMyMissions(Integer driverId) {
+        return missionRepository.findAllByDriverId(driverId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    public List<DispatchMissionResponse> getMyActiveMissions(Integer driverId) {
+        return missionRepository.findByDriverIdAndStatusIn(driverId, ACTIVE_STATUSES).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    public DispatchMissionResponse getMyMission(Integer driverId, Integer missionId) {
+        DispatchMission mission = missionRepository.findByIdAndDriverId(missionId, driverId)
+                .orElseThrow(() -> new MissionException(404, "MISSION_NOT_FOUND",
+                        "Không tìm thấy nhiệm vụ id: " + missionId));
+        return toResponse(mission);
+    }
+
     // ══════════════════════════════════════════════════════
     // DRIVER: ACCEPT
     // ══════════════════════════════════════════════════════
