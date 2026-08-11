@@ -40,7 +40,7 @@ public class DispatchMissionController {
     // ── TẠO MISSION ───────────────────────────────────────
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN, DISPATCHER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     @Operation(
             summary = "Tạo lệnh điều xe mới",
             description = "DISPATCHER/ADMIN. Request phải ở trạng thái RECOMMENDING"
@@ -113,7 +113,7 @@ public class DispatchMissionController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN, DISPATCHER, DRIVER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER', 'DRIVER')")
     @Operation(
             summary = "Danh sách tất cả nhiệm vụ",
             description = "DISPATCHER/ADMIN/DRIVER"
@@ -128,7 +128,7 @@ public class DispatchMissionController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN, DISPATCHER, DRIVER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER', 'DRIVER')")
     @Operation(summary = "Chi tiết một nhiệm vụ")
     public ResponseEntity<BaseResponse<DispatchMissionResponse>> getById(
             @PathVariable Integer id
@@ -301,7 +301,7 @@ public class DispatchMissionController {
 
     // ── DISPATCHER: REDISPATCH ─────────────────────────────
     @PostMapping("/redispatch")
-    @PreAuthorize("hasAnyRole('ADMIN, DISPATCHER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     @Operation(
             summary = "Điều xe khác khi driver từ chối",
             description = "DISPATCHER, ADMIN. Request phải ở trạng thái DISPATCHED"

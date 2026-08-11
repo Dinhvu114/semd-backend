@@ -3,6 +3,8 @@ package com.semd.backend.entity;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "simulation_legs")
@@ -23,8 +25,9 @@ public class SimulationLeg {
     @Column(name = "sequence_no", nullable = false)
     private Short sequenceNo;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "route_payload", columnDefinition = "jsonb")
-    private String routePayload; // lưu dạng JSON string
+    private String routePayload;
 
     @Column(name = "distance_m")
     private BigDecimal distanceM;
