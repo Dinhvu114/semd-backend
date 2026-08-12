@@ -16,7 +16,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/providers")
-@Tag(name = "Providers", description = "Quản lý đơn vị cung cấp xe cứu thương / phòng khám (Providers)")
+@Tag(name = "Providers", description = "Quản lý đơn vị cung cấp dịch vụ cứu thương")
 public class ProviderController {
 
     private final ProviderService service;

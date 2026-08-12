@@ -1,25 +1,16 @@
 package com.semd.backend.controller;
 
-import com.semd.backend.dto.common.BaseResponse;
 import com.semd.backend.dto.emergencyCall.AICallbackRequest;
-import com.semd.backend.dto.emergencyCall.EmergencyCallResponse;
-import com.semd.backend.security.UserPrincipal;
 import com.semd.backend.service.EmergencyCallService;
-import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/emergency-calls")

@@ -16,8 +16,8 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/ambulance-simulations")
 @Tag(
-        name = "Ambulance Simulation",
-        description = "Mô phỏng hành trình xe cấp cứu"
+        name = "Simulation Tracking",
+        description = "API theo dõi hành trình cho REPORTER và DRIVER"
 )
 public class SimulationTrackingController {
 
