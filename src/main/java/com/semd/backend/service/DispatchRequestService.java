@@ -26,6 +26,7 @@ import java.time.LocalDateTime;
 import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
+
 @Service
 public class DispatchRequestService {
 
@@ -35,7 +36,7 @@ public class DispatchRequestService {
     private static final double FRESHNESS_WEIGHT = 0.10;
     private static final double RISK_WEIGHT = 0.05;
     private static final double AVERAGE_SPEED_KMH = 40.0;
-    private static final long LOCATION_STALE_SECONDS = 600;
+    private static final long LOCATION_STALE_SECONDS = 1800;
     private static final int RECOMMENDATION_LIMIT = 3;
 
     private final DispatchRequestRepository requestRepository;
@@ -67,7 +68,7 @@ public class DispatchRequestService {
     }
 
     // ──────────────────────────────────────────────
-    // 1. GET /dispatch-requests  (filter by status, zoneId)
+    // 1. GET /dispatch-requests (filter by status, zoneId)
     // ──────────────────────────────────────────────
     @Transactional(readOnly = true)
     public List<DispatchRequestDto> getAllRequests(DispatchRequestStatus status, Integer zoneId) {
@@ -88,7 +89,7 @@ public class DispatchRequestService {
     }
 
     // ──────────────────────────────────────────────
-    // 2. GET /dispatch-requests/{id}  (detail)
+    // 2. GET /dispatch-requests/{id} (detail)
     // ──────────────────────────────────────────────
     @Transactional(readOnly = true)
     public DispatchRequestDetailDto getDetail(Integer id) {
@@ -127,8 +128,7 @@ public class DispatchRequestService {
                 req.getConfirmedUrgencyLevel(),
                 missionCount,
                 req.getExtendedRequirements(),
-                req.getCreatedAt()
-        );
+                req.getCreatedAt());
     }
 
     // ──────────────────────────────────────────────
@@ -149,14 +149,14 @@ public class DispatchRequestService {
         headers.setContentType(MediaType.APPLICATION_JSON);
         Map<String, Object> body = Map.of(
                 "call_id", call.getId(),
-                "audio_url", call.getAudioUrl()
-        );
+                "audio_url", call.getAudioUrl());
         HttpEntity<Map<String, Object>> httpEntity = new HttpEntity<>(body, headers);
 
         try {
             ResponseEntity<Map> response = restTemplate.postForEntity(url, httpEntity, Map.class);
             Map<String, Object> result = response.getBody();
-            if (result == null) throw new RuntimeException("AI Service trả về phản hồi trống.");
+            if (result == null)
+                throw new RuntimeException("AI Service trả về phản hồi trống.");
 
             // Cập nhật kết quả AI vào DB
             String urgency = (String) result.getOrDefault("urgency", "MEDIUM");
@@ -174,8 +174,7 @@ public class DispatchRequestService {
             return Map.of(
                     "symptoms", result.getOrDefault("symptoms", List.of()),
                     "severity", urgency,
-                    "confidence", confidence
-            );
+                    "confidence", confidence);
         } catch (Exception e) {
             throw new RuntimeException("Không thể kết nối tới AI Service: " + e.getMessage());
         }
@@ -292,8 +291,7 @@ public class DispatchRequestService {
         if (request.getStatus() != DispatchRequestStatus.CONFIRMED
                 && request.getStatus() != DispatchRequestStatus.RECOMMENDING) {
             throw new BusinessConflictException(
-                    "Chỉ request CONFIRMED hoặc RECOMMENDING mới được đề xuất xe"
-            );
+                    "Chỉ request CONFIRMED hoặc RECOMMENDING mới được đề xuất xe");
         }
         if (request.getTargetLocation() == null) {
             throw new IllegalStateException("Yêu cầu #" + id + " chưa có tọa độ để đề xuất xe.");
@@ -302,10 +300,10 @@ public class DispatchRequestService {
         // Lần đầu gọi recommendation:
         // CONFIRMED -> RECOMMENDING
         if (request.getStatus() == DispatchRequestStatus.CONFIRMED) {
-        request.setStatus(DispatchRequestStatus.RECOMMENDING);
-        requestRepository.save(request);
-        broadcastUpdate(request);
-    }
+            request.setStatus(DispatchRequestStatus.RECOMMENDING);
+            requestRepository.save(request);
+            broadcastUpdate(request);
+        }
 
         LocalDateTime calculatedAt = LocalDateTime.now();
         List<CandidateScore> candidates = resourceRepository
@@ -339,15 +337,71 @@ public class DispatchRequestService {
         return result;
     }
 
-    private boolean isEligible(DispatchResource resource, DispatchRequest request, LocalDateTime calculatedAt) {
-        if (resource.getCurrentLocation() == null || resource.getCurrentDriver() == null) {
+    private boolean isEligible(
+            DispatchResource resource,
+            DispatchRequest request,
+            LocalDateTime calculatedAt) {
+        System.out.println(
+                "=== CHECK RESOURCE "
+                        + resource.getId()
+                        + " / "
+                        + resource.getResourceCode()
+                        + " ===");
+
+        System.out.println(
+                "driver = "
+                        + (resource.getCurrentDriver() != null));
+
+        System.out.println(
+                "location = "
+                        + resource.getCurrentLocation());
+
+        System.out.println(
+                "updatedAt = "
+                        + resource.getUpdatedAt());
+
+        System.out.println(
+                "calculatedAt = "
+                        + calculatedAt);
+
+        if (resource.getCurrentLocation() == null
+                || resource.getCurrentDriver() == null) {
+
+            System.out.println("REJECT: driver/location");
             return false;
         }
+
         if (resource.getUpdatedAt() == null
-                || resource.getUpdatedAt().isBefore(calculatedAt.minusSeconds(LOCATION_STALE_SECONDS))) {
+                || resource.getUpdatedAt()
+                        .isBefore(
+                                calculatedAt.minusSeconds(
+                                        LOCATION_STALE_SECONDS))) {
+
+            System.out.println("REJECT: stale location");
             return false;
         }
-        return hasRequiredCapabilities(resource, request);
+
+        boolean capability = hasRequiredCapabilities(
+                resource,
+                request);
+
+        System.out.println(
+                "request serviceType = "
+                        + (request.getServiceType() == null
+                                ? null
+                                : request.getServiceType().getId()));
+
+        System.out.println(
+                "resource type = "
+                        + (resource.getResourceType() == null
+                                ? null
+                                : resource.getResourceType().getId()));
+
+        System.out.println(
+                "capability eligible = "
+                        + capability);
+
+        return capability;
     }
 
     private CandidateScore buildCandidate(
@@ -386,11 +440,16 @@ public class DispatchRequestService {
         CandidateScore candidate = scored.candidate();
         List<String> reasons = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
-        if (scored.nEta() >= 0.8) reasons.add("Thời gian dự kiến đến thấp");
-        if (scored.nDistance() >= 0.8) reasons.add("Khoảng cách gần");
-        if (scored.nCapability() >= 1.0) reasons.add("Đáp ứng đầy đủ năng lực yêu cầu");
-        if (scored.nFreshness() >= 0.8) reasons.add("Vị trí được cập nhật gần đây");
-        if (scored.nRisk() > 0) warnings.add("Xe có dữ liệu cảnh báo vận hành");
+        if (scored.nEta() >= 0.8)
+            reasons.add("Thời gian dự kiến đến thấp");
+        if (scored.nDistance() >= 0.8)
+            reasons.add("Khoảng cách gần");
+        if (scored.nCapability() >= 1.0)
+            reasons.add("Đáp ứng đầy đủ năng lực yêu cầu");
+        if (scored.nFreshness() >= 0.8)
+            reasons.add("Vị trí được cập nhật gần đây");
+        if (scored.nRisk() > 0)
+            warnings.add("Xe có dữ liệu cảnh báo vận hành");
 
         return new RecommendationItemDto(
                 candidate.resource().getId(),
@@ -436,7 +495,8 @@ public class DispatchRequestService {
         return request.getServiceType() != null
                 && resource.getResourceType() != null
                 && Objects.equals(request.getServiceType().getId(), resource.getResourceType().getId())
-                ? 1.0 : 0.5;
+                        ? 1.0
+                        : 0.5;
     }
 
     private double calculateRisk(DispatchResource resource) {
@@ -561,36 +621,36 @@ public class DispatchRequestService {
     // ──────────────────────────────────────────────
     // @Transactional
     // public Map<String, String> cancel(Integer id) {
-    //     DispatchRequest request = findById(id);
+    // DispatchRequest request = findById(id);
 
-    //     if (request.getStatus() == DispatchRequestStatus.COMPLETED) {
-    //         throw new IllegalStateException("Không thể hủy yêu cầu đã hoàn thành.");
-    //     }
+    // if (request.getStatus() == DispatchRequestStatus.COMPLETED) {
+    // throw new IllegalStateException("Không thể hủy yêu cầu đã hoàn thành.");
+    // }
 
-    //     // Giải phóng xe đang gắn (nếu có)
-    //     missionRepository.findActiveMissionByRequestId(id).ifPresent(mission -> {
-    //         mission.setStatus(DispatchMissionStatus.CANCELLED);
-    //         DispatchResource resource = mission.getResource();
-    //         if (resource != null) {
-    //             resource.setStatus(DispatchResourceStatus.AVAILABLE);
-    //             resourceRepository.save(resource);
-    //         }
+    // // Giải phóng xe đang gắn (nếu có)
+    // missionRepository.findActiveMissionByRequestId(id).ifPresent(mission -> {
+    // mission.setStatus(DispatchMissionStatus.CANCELLED);
+    // DispatchResource resource = mission.getResource();
+    // if (resource != null) {
+    // resource.setStatus(DispatchResourceStatus.AVAILABLE);
+    // resourceRepository.save(resource);
+    // }
 
-    //         MissionStatusLog log = new MissionStatusLog();
-    //         log.setMission(mission);
-    //         log.setOldStatus(mission.getStatus().name());
-    //         log.setNewStatus(DispatchMissionStatus.CANCELLED.name());
-    //         log.setNote("Hủy yêu cầu - giải phóng xe");
-    //         log.setCreatedAt(LocalDateTime.now());
-    //         statusLogRepository.save(log);
-    //         missionRepository.save(mission);
-    //     });
+    // MissionStatusLog log = new MissionStatusLog();
+    // log.setMission(mission);
+    // log.setOldStatus(mission.getStatus().name());
+    // log.setNewStatus(DispatchMissionStatus.CANCELLED.name());
+    // log.setNote("Hủy yêu cầu - giải phóng xe");
+    // log.setCreatedAt(LocalDateTime.now());
+    // statusLogRepository.save(log);
+    // missionRepository.save(mission);
+    // });
 
-    //     request.setStatus(DispatchRequestStatus.CANCELLED);
-    //     requestRepository.save(request);
+    // request.setStatus(DispatchRequestStatus.CANCELLED);
+    // requestRepository.save(request);
 
-    //     broadcastUpdate(request);
-    //     return Map.of("status", "CANCELLED");
+    // broadcastUpdate(request);
+    // return Map.of("status", "CANCELLED");
     // }
 
     // ──────────────────────────────────────────────
@@ -611,7 +671,7 @@ public class DispatchRequestService {
             if (call.getAiTranscript() != null) {
                 events.add(new TimelineEventDto("AI_ANALYZED", call.getCreatedAt(),
                         "Mức độ: " + call.getAiUrgencyPrediction() +
-                        " | Độ tin cậy: " + call.getAiConfidenceScore() + "%"));
+                                " | Độ tin cậy: " + call.getAiConfidenceScore() + "%"));
             }
         }
 
@@ -630,8 +690,7 @@ public class DispatchRequestService {
                 events.add(new TimelineEventDto(
                         "MISSION_" + log.getNewStatus(),
                         log.getCreatedAt(),
-                        log.getNote()
-                ));
+                        log.getNote()));
             }
         }
 
@@ -653,7 +712,7 @@ public class DispatchRequestService {
                 requestRepository.countByStatus(DispatchRequestStatus.DISPATCHED),
                 requestRepository.countByStatusAndCreatedAtAfter(DispatchRequestStatus.COMPLETED, startOfToday),
                 requestRepository.countByStatus(DispatchRequestStatus.REJECTED)
-                // requestRepository.countByStatus(DispatchRequestStatus.CANCELLED)
+        // requestRepository.countByStatus(DispatchRequestStatus.CANCELLED)
         );
     }
 
@@ -672,16 +731,16 @@ public class DispatchRequestService {
             specification = specification.and((root, query, cb) -> cb.equal(root.get("status"), status));
         }
         if (urgencyLevel != null && !urgencyLevel.isBlank()) {
-            specification = specification.and((root, query, cb) ->
-                    cb.equal(cb.upper(root.get("urgencyLevel")), urgencyLevel.trim().toUpperCase()));
+            specification = specification.and((root, query, cb) -> cb.equal(cb.upper(root.get("urgencyLevel")),
+                    urgencyLevel.trim().toUpperCase()));
         }
         if (serviceTypeId != null) {
-            specification = specification.and((root, query, cb) ->
-                    cb.equal(root.get("serviceType").get("id"), serviceTypeId));
+            specification = specification
+                    .and((root, query, cb) -> cb.equal(root.get("serviceType").get("id"), serviceTypeId));
         }
         if (operationZoneId != null) {
-            specification = specification.and((root, query, cb) ->
-                    cb.equal(root.get("operationZone").get("id"), operationZoneId));
+            specification = specification
+                    .and((root, query, cb) -> cb.equal(root.get("operationZone").get("id"), operationZoneId));
         }
         return requestRepository.findAll(specification, pageable).map(this::mapToDto);
     }
@@ -709,13 +768,15 @@ public class DispatchRequestService {
     }
 
     private String trimToNull(String value) {
-        if (value == null || value.isBlank()) return null;
+        if (value == null || value.isBlank())
+            return null;
         return value.trim();
     }
 
     private String normalizeUrgency(String urgency) {
         String normalized = trimToNull(urgency);
-        if (normalized == null) return null;
+        if (normalized == null)
+            return null;
         normalized = normalized.toUpperCase(Locale.ROOT);
         if (!Set.of("LOW", "MEDIUM", "HIGH", "CRITICAL").contains(normalized)) {
             throw new IllegalArgumentException(
@@ -729,13 +790,13 @@ public class DispatchRequestService {
             java.math.BigDecimal longitude) {
         if (latitude != null
                 && (latitude.compareTo(java.math.BigDecimal.valueOf(-90)) < 0
-                || latitude.compareTo(java.math.BigDecimal.valueOf(90)) > 0)) {
+                        || latitude.compareTo(java.math.BigDecimal.valueOf(90)) > 0)) {
             throw new IllegalArgumentException(
                     "confirmedLatitude phải nằm trong khoảng -90 đến 90");
         }
         if (longitude != null
                 && (longitude.compareTo(java.math.BigDecimal.valueOf(-180)) < 0
-                || longitude.compareTo(java.math.BigDecimal.valueOf(180)) > 0)) {
+                        || longitude.compareTo(java.math.BigDecimal.valueOf(180)) > 0)) {
             throw new IllegalArgumentException(
                     "confirmedLongitude phải nằm trong khoảng -180 đến 180");
         }
@@ -745,8 +806,7 @@ public class DispatchRequestService {
         messagingTemplate.convertAndSend("/topic/dispatcher/requests",
                 (Object) Map.of(
                         "id", request.getId(),
-                        "status", request.getStatus().name()
-                ));
+                        "status", request.getStatus().name()));
     }
 
     private DispatchRequestDto mapToDto(DispatchRequest req) {
@@ -756,15 +816,15 @@ public class DispatchRequestService {
         Integer zoneId = req.getOperationZone() != null ? req.getOperationZone().getId() : null;
         String zoneName = req.getOperationZone() != null ? req.getOperationZone().getZoneName() : null;
         Integer dispatcherId = req.getCreatedByDispatcher() != null ? req.getCreatedByDispatcher().getId() : null;
-        String dispatcherName = req.getCreatedByDispatcher() != null ? req.getCreatedByDispatcher().getFullName() : null;
+        String dispatcherName = req.getCreatedByDispatcher() != null ? req.getCreatedByDispatcher().getFullName()
+                : null;
 
         return new DispatchRequestDto(
                 req.getId(), callId, serviceTypeId, serviceTypeName,
                 zoneId, zoneName, dispatcherId, dispatcherName,
                 req.getUrgencyLevel(), req.getLongitude(), req.getLatitude(),
                 req.getStatus() != null ? req.getStatus().name() : null,
-                req.getExtendedRequirements(), req.getCreatedAt()
-        );
+                req.getExtendedRequirements(), req.getCreatedAt());
     }
 
     /**
@@ -776,7 +836,7 @@ public class DispatchRequestService {
         double dLon = Math.toRadians(lon2 - lon1);
         double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
                 + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                        * Math.sin(dLon / 2) * Math.sin(dLon / 2);
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 }

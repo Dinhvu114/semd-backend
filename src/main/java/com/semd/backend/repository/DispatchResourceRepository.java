@@ -24,6 +24,9 @@ public interface DispatchResourceRepository extends JpaRepository<DispatchResour
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM DispatchResource r WHERE r.id = :id")
     Optional<DispatchResource> findByIdWithLock(@Param("id") Integer id);
+
+    // driver
+    Optional<DispatchResource> findByCurrentDriverId(Integer driverId);
 }
 
 

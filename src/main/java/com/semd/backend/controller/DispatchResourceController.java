@@ -8,6 +8,8 @@ import com.semd.backend.service.DispatchResourceService;
 import com.semd.backend.entity.DispatchResourceStatus;
 import com.semd.backend.dto.common.Metadata;
 import com.semd.backend.dto.common.PageRequestDto;
+import com.semd.backend.dto.request.UpdateResourceLocationRequest;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -91,5 +93,22 @@ public class DispatchResourceController {
         service.deleteResource(id);
         return ResponseEntity.ok(BaseResponse.success(null));
     }
+    @PatchMapping("/{id}/location")
+    @PreAuthorize("hasAnyRole('DISPATCHER')")
+    @Operation(summary = "Cập nhật vị trí xe cứu thương")
+    public ResponseEntity<BaseResponse<Void>> updateLocation(
+            @PathVariable Integer id,
+            @Valid @RequestBody UpdateResourceLocationRequest request
+    ) {
 
+        service.updateLocation(id, request);
+
+        return ResponseEntity.ok(
+                BaseResponse.success(
+                        200,
+                        "Cập nhật vị trí phương tiện thành công",
+                        null
+                )
+        );
+    }
 }

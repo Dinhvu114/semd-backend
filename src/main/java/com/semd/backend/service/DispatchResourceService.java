@@ -2,6 +2,8 @@ package com.semd.backend.service;
 
 import com.semd.backend.dto.DispatchResourceDto;
 import com.semd.backend.dto.DispatchResourceRequest;
+import com.semd.backend.dto.request.UpdateResourceLocationRequest;
+import com.semd.backend.dto.response.DispatchResourceResponse;
 import com.semd.backend.entity.*;
 import com.semd.backend.exception.ResourceNotFoundException;
 import com.semd.backend.repository.DispatchResourceRepository;
@@ -17,8 +19,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class DispatchResourceService {
@@ -217,5 +219,111 @@ public class DispatchResourceService {
                 resource.getExtendedAttributes(),
                 resource.getUpdatedAt()
         );
+    }
+
+    // DRIVER
+
+    @Transactional
+    public void updateLocation(
+            Integer resourceId,
+            UpdateResourceLocationRequest request
+    ) {
+
+        DispatchResource resource =
+                repository.findById(resourceId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Không tìm thấy phương tiện với id = "
+                                                + resourceId
+                                )
+                        );
+
+        Point point = geometryFactory.createPoint(
+                new Coordinate(
+                        request.longitude(),
+                        request.latitude()
+                )
+        );
+
+        point.setSRID(4326);
+
+        resource.setCurrentLocation(point);
+        resource.setUpdatedAt(LocalDateTime.now());
+
+        repository.save(resource);
+    }
+
+    @Transactional(readOnly = true)
+    public DispatchResourceResponse getMyResource(Integer driverId) {
+
+        DispatchResource resource =
+                repository.findByCurrentDriverId(driverId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Tài xế hiện chưa được phân công phương tiện"
+                                )
+                        );
+
+        return toResponse(resource);
+    }
+    private DispatchResourceResponse toResponse(DispatchResource resource) {
+        Double latitude = null;
+        Double longitude = null;
+
+        if (resource.getCurrentLocation() != null) {
+            latitude = resource.getCurrentLocation().getY();
+            longitude = resource.getCurrentLocation().getX();
+        }
+
+        Integer driverId = null;
+        String driverName = null;
+
+        if (resource.getCurrentDriver() != null) {
+            driverId = resource.getCurrentDriver().getId();
+            driverName = resource.getCurrentDriver().getFullName();
+        }
+
+        String resourceType = null;
+
+        if (resource.getResourceType() != null) {
+            resourceType = resource.getResourceType().getDisplayName();
+        }
+
+        List<String> capabilities = extractCapabilities(resource);
+
+        return new DispatchResourceResponse(
+                resource.getId(),
+                resource.getResourceCode(),
+                resourceType,
+                resource.getStatus().name(),
+                driverId,
+                driverName,
+                latitude,
+                longitude,
+                capabilities,
+                resource.getUpdatedAt()
+        );
+    }
+    private List<String> extractCapabilities(DispatchResource resource) {
+        if (resource.getExtendedAttributes() == null) {
+            return List.of();
+        }
+
+        Object capabilitiesObject =
+                resource.getExtendedAttributes().get("capabilities");
+
+        if (!(capabilitiesObject instanceof List<?> capabilitiesList)) {
+            return List.of();
+        }
+
+        List<String> capabilities = new ArrayList<>();
+
+        for (Object item : capabilitiesList) {
+            if (item != null) {
+                capabilities.add(item.toString());
+            }
+        }
+
+        return capabilities;
     }
 }
