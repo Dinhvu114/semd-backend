@@ -2,7 +2,7 @@ package com.semd.backend.controller;
 
 import com.semd.backend.dto.emergencyCall.AICallbackRequest;
 import com.semd.backend.service.EmergencyCallService;
-import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import org.springframework.web.bind.annotation.RequestBody;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import org.springframework.http.HttpStatus;
@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/emergency-calls")
+@RequestMapping("/api/v1/calls")
 @Tag(name = "Emergency Callback", description = "API callback")
 public class SystemEmergencyCallController {
     private final EmergencyCallService callService;
