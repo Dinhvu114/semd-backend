@@ -83,4 +83,17 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.valueOf(ex.getHttpStatus()));
 
     }
+    @ExceptionHandler(IdempotencyConflictException.class)
+    public ResponseEntity<BaseResponse<Void>> handleIdempotencyConflict(
+        IdempotencyConflictException ex
+    ) {
+        return ResponseEntity
+            .status(HttpStatus.CONFLICT)
+            .body(
+                BaseResponse.fail(
+                    ex.getMessage(),
+                    409
+            )
+        );
+    }
 }

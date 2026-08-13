@@ -38,61 +38,98 @@ public class ReporterEmergencyCallController {
     @Operation(summary = "Gọi cấp cứu", description = "Tải lên ghi âm cuộc gọi cấp cứu kèm định vị")
     @PostMapping("/voice")
     public ResponseEntity<?> createVoiceCall(
-            @Valid @RequestBody VoiceCallRequest request,
-            @AuthenticationPrincipal UserPrincipal principal,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
+        @Valid @RequestBody VoiceCallRequest request,
+        @AuthenticationPrincipal UserPrincipal principal,
+        @RequestHeader(
+            value = "Idempotency-Key",
+            required = false
+        ) String idempotencyKey
     ) {
-        if (idempotencyKey != null && idempotencyService.isDuplicate(idempotencyKey)) {
-            return idempotencyService.getResponse(idempotencyKey);
-        }
-        if (principal == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        Double latitude = (request.location() != null) ? request.location().latitude() : null;
-        Double longitude = (request.location() != null) ? request.location().longitude() : null;
+    if (principal == null) {
+        return ResponseEntity
+            .status(HttpStatus.UNAUTHORIZED)
+            .build();
+    }
 
-        EmergencyCallResponse createdCall = callService.createEmergencyVoiceCall(
-                principal.getPhoneNumber(),
-                principal.getFullName(),
-                latitude,
-                longitude,
-                request.audioObjectKey(),
-                request.description()
+    return idempotencyService.execute(
+        "call:voice",
+        principal.getId(),
+        idempotencyKey,
+        () -> {
+            Double latitude =
+                request.location() != null
+                    ? request.location().latitude()
+                    : null;
+
+            Double longitude =
+                request.location() != null
+                    ? request.location().longitude()
+                    : null;
+
+            EmergencyCallResponse createdCall =
+                callService.createEmergencyVoiceCall(
+                    principal.getPhoneNumber(),
+                    principal.getFullName(),
+                    latitude,
+                    longitude,
+                    request.audioObjectKey(),
+                    request.description()
+                );
+
+            return ResponseEntity
+                .status(HttpStatus.ACCEPTED)
+                .body(
+                    BaseResponse.success(
+                        202,
+                        "Đã tiếp nhận cuộc gọi khẩn cấp",
+                        createdCall
+                    )
+                );
+            }
         );
-        BaseResponse<EmergencyCallResponse> response = BaseResponse.success(202, "Đã tiếp nhận cuộc gọi khẩn cấp", createdCall);
-        ResponseEntity<BaseResponse<EmergencyCallResponse>> resEntity = ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
-        if (idempotencyKey != null) {
-            idempotencyService.save(idempotencyKey, resEntity);
-        }
-        return resEntity;
     }
 
     @Operation(summary = "Gửi định vị", description = "Tải lên định vị")
     @PostMapping("/sos")
     public ResponseEntity<?> createSosCall(
-            @Valid @RequestBody SosRequest request,
-            @AuthenticationPrincipal UserPrincipal principal,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
+        @Valid @RequestBody SosRequest request,
+        @AuthenticationPrincipal UserPrincipal principal,
+        @RequestHeader(
+            value = "Idempotency-Key",
+            required = false
+        ) String idempotencyKey
     ) {
-        if (idempotencyKey != null && idempotencyService.isDuplicate(idempotencyKey)) {
-            return idempotencyService.getResponse(idempotencyKey);
-        }
-        if (principal == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        EmergencyCallResponse createdCall = callService.createEmergencySosCall(
+    if (principal == null) {
+        return ResponseEntity
+            .status(HttpStatus.UNAUTHORIZED)
+            .build();
+    }
+
+    return idempotencyService.execute(
+        "call:sos",
+        principal.getId(),
+        idempotencyKey,
+        () -> {
+        EmergencyCallResponse createdCall =
+            callService.createEmergencySosCall(
                 principal.getPhoneNumber(),
                 principal.getFullName(),
                 request.latitude(),
                 request.longitude(),
                 request.description()
+            );
+
+            return ResponseEntity
+                .status(HttpStatus.ACCEPTED)
+                .body(
+                BaseResponse.success(
+                    202,
+                    "Đã tiếp nhận yêu cầu SOS",
+                    createdCall
+                    )
+                );
+            }
         );
-        BaseResponse<EmergencyCallResponse> response = BaseResponse.success(202, "Đã tiếp nhận yêu cầu SOS", createdCall);
-        ResponseEntity<BaseResponse<EmergencyCallResponse>> resEntity = ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
-        if (idempotencyKey != null) {
-            idempotencyService.save(idempotencyKey, resEntity);
-        }
-        return resEntity;
     }
 
     @GetMapping("/me")

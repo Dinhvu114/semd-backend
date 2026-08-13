@@ -40,44 +40,35 @@ public class DispatchMissionController {
     // ── TẠO MISSION ───────────────────────────────────────
 
     @PostMapping
-    @PreAuthorize("hasRole('DISPATCHER')")
-    @Operation(
-            summary = "Tạo lệnh điều xe mới",
-            description = "DISPATCHER. Request phải ở trạng thái RECOMMENDING"
-    )
-    public ResponseEntity<?> create(
-            @Valid @RequestBody CreateDispatchMissionRequest request,
-            @RequestHeader(
-                    value = "Idempotency-Key",
-                    required = false
-            ) String idempotencyKey
-    ) {
-        if (idempotencyKey != null
-                && idempotencyService.isDuplicate(idempotencyKey)) {
-            return idempotencyService.getResponse(idempotencyKey);
+        @PreAuthorize("hasRole('DISPATCHER')")
+        public ResponseEntity<?> create(
+                @Valid @RequestBody CreateDispatchMissionRequest request,
+                @RequestHeader(
+                        value = "Idempotency-Key",
+                        required = false
+                ) String idempotencyKey,
+                @AuthenticationPrincipal UserPrincipal principal
+        ) {
+        return idempotencyService.execute(
+                "dispatch:create",
+                principal.getId(),
+                idempotencyKey,
+                () -> {
+                        DispatchMissionResponse result =
+                                missionService.create(request);
+
+                        return ResponseEntity
+                                .status(HttpStatus.CREATED)
+                                .body(
+                                        BaseResponse.success(
+                                                201,
+                                                "Tạo lệnh điều xe thành công",
+                                                result
+                                        )
+                                );
+                }
+        );
         }
-
-        DispatchMissionResponse result =
-                missionService.create(request);
-
-        BaseResponse<DispatchMissionResponse> body =
-                BaseResponse.success(
-                        HttpStatus.CREATED.value(),
-                        "Tạo lệnh điều xe thành công",
-                        result
-                );
-
-        ResponseEntity<BaseResponse<DispatchMissionResponse>> response =
-                ResponseEntity
-                        .status(HttpStatus.CREATED)
-                        .body(body);
-
-        if (idempotencyKey != null) {
-            idempotencyService.save(idempotencyKey, response);
-        }
-
-        return response;
-    }
 
     @GetMapping()
     @PreAuthorize("hasRole('DISPATCHER')")
@@ -107,22 +98,37 @@ public class DispatchMissionController {
 
     // ── DISPATCHER: REDISPATCH ─────────────────────────────
     @PostMapping("/redispatch")
-    @PreAuthorize("hasRole('DISPATCHER')")
-    @Operation(
-            summary = "Điều xe khác khi driver từ chối",
-            description = "DISPATCHER. Request phải ở trạng thái DISPATCHED"
-    )
-    public ResponseEntity<BaseResponse<DispatchMissionResponse>> redispatch(
-            @RequestParam Integer requestId,
-            @RequestParam Integer newResourceId) {
-        DispatchMissionResponse result =
-            missionService.redispatch(requestId, newResourceId);
+        @PreAuthorize("hasRole('DISPATCHER')")
+        public ResponseEntity<?> redispatch(
+                @RequestParam Integer requestId,
+                @RequestParam Integer newResourceId,
+                @RequestHeader(
+                        value = "Idempotency-Key",
+                        required = false
+                ) String idempotencyKey,
+                @AuthenticationPrincipal UserPrincipal principal
+        ) {
+        return idempotencyService.execute(
+                "dispatch:redispatch",
+                principal.getId(),
+                idempotencyKey,
+                () -> {
+                        DispatchMissionResponse result =
+                                missionService.redispatch(
+                                        requestId,
+                                        newResourceId
+                                );
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(BaseResponse.success(
-                        201,
-                        "Điều phối lại thành công",
-                        result
-                ));
+                        return ResponseEntity
+                                .status(HttpStatus.CREATED)
+                                .body(
+                                        BaseResponse.success(
+                                                201,
+                                                "Điều phối lại thành công",
+                                                result
+                                        )
+                                );
+                }
+        );
         }
 }
