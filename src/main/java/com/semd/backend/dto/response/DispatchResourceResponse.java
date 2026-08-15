@@ -2,6 +2,7 @@ package com.semd.backend.dto.response;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 public record DispatchResourceResponse(
         Integer id,
@@ -12,7 +13,7 @@ public record DispatchResourceResponse(
         String driverName,
         Double latitude,
         Double longitude,
-        List<String> capabilities,
+        Map<String, Object> extendedAttributes,
         LocalDateTime updatedAt
 ) {
 }

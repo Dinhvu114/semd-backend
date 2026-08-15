@@ -266,7 +266,9 @@ public class DispatchResourceService {
 
         return toResponse(resource);
     }
-    private DispatchResourceResponse toResponse(DispatchResource resource) {
+    private DispatchResourceResponse toResponse(
+        DispatchResource resource
+    ) {
         Double latitude = null;
         Double longitude = null;
 
@@ -289,8 +291,6 @@ public class DispatchResourceService {
             resourceType = resource.getResourceType().getDisplayName();
         }
 
-        List<String> capabilities = extractCapabilities(resource);
-
         return new DispatchResourceResponse(
                 resource.getId(),
                 resource.getResourceCode(),
@@ -300,30 +300,8 @@ public class DispatchResourceService {
                 driverName,
                 latitude,
                 longitude,
-                capabilities,
+                resource.getExtendedAttributes(),
                 resource.getUpdatedAt()
         );
-    }
-    private List<String> extractCapabilities(DispatchResource resource) {
-        if (resource.getExtendedAttributes() == null) {
-            return List.of();
-        }
-
-        Object capabilitiesObject =
-                resource.getExtendedAttributes().get("capabilities");
-
-        if (!(capabilitiesObject instanceof List<?> capabilitiesList)) {
-            return List.of();
-        }
-
-        List<String> capabilities = new ArrayList<>();
-
-        for (Object item : capabilitiesList) {
-            if (item != null) {
-                capabilities.add(item.toString());
-            }
-        }
-
-        return capabilities;
     }
 }
