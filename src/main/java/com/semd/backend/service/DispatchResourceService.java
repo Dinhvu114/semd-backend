@@ -253,6 +253,34 @@ public class DispatchResourceService {
         repository.save(resource);
     }
 
+    @Transactional
+    public void updateMyResourceLocation(
+            Integer driverId,
+            UpdateResourceLocationRequest request
+    ) {
+        DispatchResource resource =
+                repository.findByCurrentDriverId(driverId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Tài xế hiện chưa được phân công phương tiện"
+                                )
+                        );
+
+        Point point = geometryFactory.createPoint(
+                new Coordinate(
+                        request.longitude(),
+                        request.latitude()
+                )
+        );
+
+        point.setSRID(4326);
+
+        resource.setCurrentLocation(point);
+        resource.setUpdatedAt(LocalDateTime.now());
+
+        repository.save(resource);
+    }
+
     @Transactional(readOnly = true)
     public DispatchResourceResponse getMyResource(Integer driverId) {
 

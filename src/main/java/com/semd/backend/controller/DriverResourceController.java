@@ -16,9 +16,9 @@ import com.semd.backend.security.UserPrincipal;
 import com.semd.backend.service.DispatchResourceService;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.RequestBody;
 
 @RestController
 @RequestMapping("/api/v1/driver-resource")
@@ -48,15 +48,15 @@ public class DriverResourceController {
         );
     }
 
-    @PatchMapping("/{id}/location")
+    @PatchMapping("/location")
     @PreAuthorize("hasAnyRole('DRIVER')")
     @Operation(summary = "Cập nhật vị trí xe cứu thương")
     public ResponseEntity<BaseResponse<Void>> updateLocation(
-        @PathVariable Integer id,
+        @AuthenticationPrincipal UserPrincipal principal,
         @Valid @RequestBody UpdateResourceLocationRequest request
     ) {
 
-        resourceService.updateLocation(id, request);
+        resourceService.updateMyResourceLocation(principal.getId(), request);
 
         return ResponseEntity.ok(
             BaseResponse.success(

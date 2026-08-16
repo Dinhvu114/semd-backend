@@ -86,13 +86,14 @@ public class DriverMissionController {
     @PreAuthorize("hasRole('DRIVER')")
     @Operation(summary = "Chấp nhận nhiệm vụ")
     public ResponseEntity<BaseResponse<DispatchMissionResponse>> accept(
-            @PathVariable Integer id
+            @PathVariable Integer id,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
         return ResponseEntity.ok(
                 BaseResponse.success(
                         HttpStatus.OK.value(),
                         "Nhận nhiệm vụ thành công",
-                        missionService.accept(id)
+                        missionService.accept(id, principal.getId())
                 )
         );
     }
@@ -102,13 +103,14 @@ public class DriverMissionController {
     @Operation(summary = "Từ chối nhiệm vụ")
     public ResponseEntity<BaseResponse<DispatchMissionResponse>> reject(
             @PathVariable Integer id,
-            @Valid @RequestBody RejectMissionRequest request
+            @Valid @RequestBody RejectMissionRequest request,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
         return ResponseEntity.ok(
                 BaseResponse.success(
                         HttpStatus.OK.value(),
                         "Từ chối nhiệm vụ thành công",
-                        missionService.reject(id, request)
+                        missionService.reject(id, request, principal.getId())
                 )
         );
     }
@@ -117,13 +119,14 @@ public class DriverMissionController {
     @PreAuthorize("hasRole('DRIVER')")
     @Operation(summary = "Bắt đầu di chuyển đến hiện trường")
     public ResponseEntity<BaseResponse<DispatchMissionResponse>> start(
-            @PathVariable Integer id
+            @PathVariable Integer id,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
         return ResponseEntity.ok(
                 BaseResponse.success(
                         HttpStatus.OK.value(),
                         "Bắt đầu di chuyển đến hiện trường",
-                        missionService.start(id)
+                        missionService.start(id, principal.getId())
                 )
         );
     }
@@ -132,13 +135,14 @@ public class DriverMissionController {
     @PreAuthorize("hasRole('DRIVER')")
     @Operation(summary = "Xác nhận đã đến hiện trường")
     public ResponseEntity<BaseResponse<DispatchMissionResponse>> arriveScene(
-            @PathVariable Integer id
+            @PathVariable Integer id,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
         return ResponseEntity.ok(
                 BaseResponse.success(
                         HttpStatus.OK.value(),
                         "Đã cập nhật trạng thái đến hiện trường",
-                        missionService.arriveScene(id)
+                        missionService.arriveScene(id, principal.getId())
                 )
         );
     }
@@ -147,13 +151,14 @@ public class DriverMissionController {
     @PreAuthorize("hasRole('DRIVER')")
     @Operation(summary = "Bắt đầu vận chuyển bệnh nhân")
     public ResponseEntity<BaseResponse<DispatchMissionResponse>> startTransport(
-            @PathVariable Integer id
+            @PathVariable Integer id,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
         return ResponseEntity.ok(
                 BaseResponse.success(
                         HttpStatus.OK.value(),
                         "Bắt đầu vận chuyển bệnh nhân",
-                        missionService.startTransport(id)
+                        missionService.startTransport(id, principal.getId())
                 )
         );
     }
@@ -162,13 +167,14 @@ public class DriverMissionController {
     @PreAuthorize("hasRole('DRIVER')")
     @Operation(summary = "Xác nhận đã đến bệnh viện")
     public ResponseEntity<BaseResponse<DispatchMissionResponse>> arriveHospital(
-            @PathVariable Integer id
+            @PathVariable Integer id,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
         return ResponseEntity.ok(
                 BaseResponse.success(
                         HttpStatus.OK.value(),
                         "Đã cập nhật trạng thái đến bệnh viện",
-                        missionService.arriveHospital(id)
+                        missionService.arriveHospital(id, principal.getId())
                 )
         );
     }
@@ -177,13 +183,14 @@ public class DriverMissionController {
     @PreAuthorize("hasRole('DRIVER')")
     @Operation(summary = "Hoàn thành nhiệm vụ")
     public ResponseEntity<BaseResponse<DispatchMissionResponse>> complete(
-            @PathVariable Integer id
+            @PathVariable Integer id,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
         return ResponseEntity.ok(
                 BaseResponse.success(
                         HttpStatus.OK.value(),
                         "Hoàn thành nhiệm vụ thành công",
-                        missionService.complete(id)
+                        missionService.complete(id, principal.getId())
                 )
         );
     }

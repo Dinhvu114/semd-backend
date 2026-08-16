@@ -59,7 +59,7 @@ public class DispatchResourceController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER', 'PROVIDER_ADMIN', 'DRIVER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER', 'PROVIDER_ADMIN')")
     @Operation(summary = "Lấy thông tin chi tiết xe cứu thương", description = "Lấy chi tiết thông tin xe cứu thương theo ID")
     public ResponseEntity<BaseResponse<DispatchResourceDto>> getResourceById(@PathVariable Integer id) {
         DispatchResourceDto result = service.getResourceById(id);
@@ -77,7 +77,7 @@ public class DispatchResourceController {
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROVIDER_ADMIN', 'DISPATCHER', 'DRIVER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROVIDER_ADMIN', 'DISPATCHER')")
     @Operation(summary = "Thay đổi trạng thái hoạt động của xe", description = "Cập nhật nhanh trạng thái hoạt động (ví dụ: AVAILABLE, BUSY, MAINTENANCE...)")
     public ResponseEntity<BaseResponse<DispatchResourceDto>> updateResourceStatus(
             @PathVariable Integer id,

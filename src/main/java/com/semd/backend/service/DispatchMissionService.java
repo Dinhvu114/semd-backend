@@ -5,8 +5,10 @@ import com.semd.backend.dto.request.RejectMissionRequest;
 import com.semd.backend.dto.response.DispatchMissionResponse;
 import com.semd.backend.entity.*;
 import com.semd.backend.exception.BusinessConflictException;
+import com.semd.backend.exception.ResourceNotFoundException;
 import com.semd.backend.repository.*;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -162,8 +164,8 @@ public class DispatchMissionService {
     // DRIVER: ACCEPT
     // ══════════════════════════════════════════════════════
     @Transactional
-    public DispatchMissionResponse accept(Integer missionId) {
-        DispatchMission mission = lockOrThrow(missionId);
+    public DispatchMissionResponse accept(Integer missionId, Integer driverId) {
+        DispatchMission mission = getOwnedMissionForUpdate(missionId, driverId);
         assertStatus(mission, DispatchMissionStatus.DISPATCHED, "accept");
 
         // Kiểm tra và cập nhật resource
@@ -192,8 +194,8 @@ public class DispatchMissionService {
     // DRIVER: REJECT
     // ══════════════════════════════════════════════════════
     @Transactional
-    public DispatchMissionResponse reject(Integer missionId, RejectMissionRequest req) {
-        DispatchMission mission = lockOrThrow(missionId);
+    public DispatchMissionResponse reject(Integer missionId, RejectMissionRequest req, Integer driverId) {
+        DispatchMission mission = getOwnedMissionForUpdate(missionId, driverId);
         assertStatus(mission, DispatchMissionStatus.DISPATCHED, "reject");
 
         mission.setStatus(DispatchMissionStatus.REJECTED);
@@ -218,8 +220,8 @@ public class DispatchMissionService {
     // DRIVER: START → EN_ROUTE
     // ══════════════════════════════════════════════════════
     @Transactional
-    public DispatchMissionResponse start(Integer missionId) {
-        DispatchMission mission = lockOrThrow(missionId);
+    public DispatchMissionResponse start(Integer missionId, Integer driverId) {
+        DispatchMission mission = getOwnedMissionForUpdate(missionId, driverId);
         assertStatus(mission, DispatchMissionStatus.ACCEPTED, "start");
 
         mission.setStatus(DispatchMissionStatus.EN_ROUTE);
@@ -238,8 +240,8 @@ public class DispatchMissionService {
     // DRIVER: ARRIVE SCENE
     // ══════════════════════════════════════════════════════
     @Transactional
-    public DispatchMissionResponse arriveScene(Integer missionId) {
-        DispatchMission mission = lockOrThrow(missionId);
+    public DispatchMissionResponse arriveScene(Integer missionId, Integer driverId) {
+        DispatchMission mission = getOwnedMissionForUpdate(missionId, driverId);
         assertStatus(mission, DispatchMissionStatus.EN_ROUTE, "arrive-scene");
 
         mission.setStatus(DispatchMissionStatus.ARRIVED_SCENE);
@@ -258,8 +260,8 @@ public class DispatchMissionService {
     // DRIVER: START TRANSPORT
     // ══════════════════════════════════════════════════════
     @Transactional
-    public DispatchMissionResponse startTransport(Integer missionId) {
-        DispatchMission mission = lockOrThrow(missionId);
+    public DispatchMissionResponse startTransport(Integer missionId, Integer driverId) {
+        DispatchMission mission = getOwnedMissionForUpdate(missionId, driverId);
         assertStatus(mission, DispatchMissionStatus.ARRIVED_SCENE, "start-transport");
 
         mission.setStatus(DispatchMissionStatus.TRANSPORTING);
@@ -278,8 +280,8 @@ public class DispatchMissionService {
     // DRIVER: ARRIVE HOSPITAL
     // ══════════════════════════════════════════════════════
     @Transactional
-    public DispatchMissionResponse arriveHospital(Integer missionId) {
-        DispatchMission mission = lockOrThrow(missionId);
+    public DispatchMissionResponse arriveHospital(Integer missionId, Integer driverId) {
+        DispatchMission mission = getOwnedMissionForUpdate(missionId, driverId);
         assertStatus(mission, DispatchMissionStatus.TRANSPORTING, "arrive-hospital");
 
         mission.setStatus(DispatchMissionStatus.ARRIVED_HOSPITAL);
@@ -298,8 +300,8 @@ public class DispatchMissionService {
     // DRIVER: COMPLETE — đóng ca, giải phóng xe
     // ══════════════════════════════════════════════════════
     @Transactional
-    public DispatchMissionResponse complete(Integer missionId) {
-        DispatchMission mission = lockOrThrow(missionId);
+    public DispatchMissionResponse complete(Integer missionId, Integer driverId) {
+        DispatchMission mission = getOwnedMissionForUpdate(missionId, driverId);
         assertStatus(mission, DispatchMissionStatus.ARRIVED_HOSPITAL, "complete");
 
         mission.setStatus(DispatchMissionStatus.COMPLETED);
@@ -410,12 +412,12 @@ public class DispatchMissionService {
     // ══════════════════════════════════════════════════════
     public DispatchMissionResponse updateStatus(Integer missionId, String newStatus) {
         return switch (newStatus) {
-            case "ACCEPTED"          -> accept(missionId);
-            case "EN_ROUTE"          -> start(missionId);
-            case "ARRIVED_SCENE"     -> arriveScene(missionId);
-            case "TRANSPORTING"      -> startTransport(missionId);
-            case "ARRIVED_HOSPITAL"  -> arriveHospital(missionId);
-            case "COMPLETED"         -> complete(missionId);
+            case "ACCEPTED"          -> accept(missionId, null);
+            case "EN_ROUTE"          -> start(missionId, null);
+            case "ARRIVED_SCENE"     -> arriveScene(missionId, null);
+            case "TRANSPORTING"      -> startTransport(missionId, null);
+            case "ARRIVED_HOSPITAL"  -> arriveHospital(missionId, null);
+            case "COMPLETED"         -> complete(missionId, null);
             default -> throw new MissionException(400, "INVALID_STATUS",
                     "Trạng thái không hợp lệ: " + newStatus);
         };
@@ -431,6 +433,25 @@ public class DispatchMissionService {
         return missionRepository.findByIdWithLock(id)
                 .orElseThrow(() -> new MissionException(404, "MISSION_NOT_FOUND",
                         "Không tìm thấy mission id: " + id));
+    }
+
+    private DispatchMission getOwnedMissionForUpdate(Integer missionId, Integer driverId) {
+        DispatchMission mission = lockOrThrow(missionId);
+
+        if (driverId != null) {
+            if (mission.getResource() == null
+                    || mission.getResource().getCurrentDriver() == null
+                    || !mission.getResource()
+                            .getCurrentDriver()
+                            .getId()
+                            .equals(driverId)) {
+
+                throw new AccessDeniedException(
+                        "Nhiệm vụ không thuộc tài xế hiện tại"
+                );
+            }
+        }
+        return mission;
     }
 
     private void assertStatus(DispatchMission mission,
