@@ -410,18 +410,18 @@ public class DispatchMissionService {
     // ══════════════════════════════════════════════════════
     // HELPER — giữ lại updateStatus cho tương thích endpoint cũ
     // ══════════════════════════════════════════════════════
-    public DispatchMissionResponse updateStatus(Integer missionId, String newStatus) {
-        return switch (newStatus) {
-            case "ACCEPTED"          -> accept(missionId, null);
-            case "EN_ROUTE"          -> start(missionId, null);
-            case "ARRIVED_SCENE"     -> arriveScene(missionId, null);
-            case "TRANSPORTING"      -> startTransport(missionId, null);
-            case "ARRIVED_HOSPITAL"  -> arriveHospital(missionId, null);
-            case "COMPLETED"         -> complete(missionId, null);
-            default -> throw new MissionException(400, "INVALID_STATUS",
-                    "Trạng thái không hợp lệ: " + newStatus);
-        };
-    }
+//     public DispatchMissionResponse updateStatus(Integer missionId, String newStatus) {
+//         return switch (newStatus) {
+//             case "ACCEPTED"          -> accept(missionId, null);
+//             case "EN_ROUTE"          -> start(missionId, null);
+//             case "ARRIVED_SCENE"     -> arriveScene(missionId, null);
+//             case "TRANSPORTING"      -> startTransport(missionId, null);
+//             case "ARRIVED_HOSPITAL"  -> arriveHospital(missionId, null);
+//             case "COMPLETED"         -> complete(missionId, null);
+//             default -> throw new MissionException(400, "INVALID_STATUS",
+//                     "Trạng thái không hợp lệ: " + newStatus);
+//         };
+//     }
 
     private DispatchMission findOrThrow(Integer id) {
         return missionRepository.findById(id)
