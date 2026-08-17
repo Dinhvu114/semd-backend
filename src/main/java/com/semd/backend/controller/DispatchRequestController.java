@@ -93,17 +93,17 @@ public class DispatchRequestController {
     // ──────────────────────────────────────────────
     // 4. POST /dispatch-requests/{id}/confirm
     // ──────────────────────────────────────────────
-    @PostMapping("/{id}/confirm")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
-    @Operation(summary = "Xác nhận ca cấp cứu",
-               description = "Dispatcher xác nhận đây là ca thật, chuyển trạng thái sang CONFIRMED")
-    public ResponseEntity<BaseResponse<Map<String, String>>> confirm(
-            @PathVariable Integer id,
-            @RequestBody ConfirmDispatchRequest request,
-            @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(BaseResponse.success(
-                requestService.confirm(id, request, principal.getId())));
-    }
+    // @PostMapping("/{id}/confirm")
+    // @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    // @Operation(summary = "Xác nhận ca cấp cứu",
+    //            description = "Dispatcher xác nhận đây là ca thật, chuyển trạng thái sang CONFIRMED")
+    // public ResponseEntity<BaseResponse<Map<String, String>>> confirm(
+    //         @PathVariable Integer id,
+    //         @RequestBody ConfirmDispatchRequest request,
+    //         @AuthenticationPrincipal UserPrincipal principal) {
+    //     return ResponseEntity.ok(BaseResponse.success(
+    //             requestService.confirm(id, request, principal.getId())));
+    // }
 
     @PostMapping("/{id}/verify")
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
@@ -160,15 +160,15 @@ public class DispatchRequestController {
     // ──────────────────────────────────────────────
     // 8. POST /dispatch-requests/{id}/redispatch
     // ──────────────────────────────────────────────
-    @PostMapping("/{id}/redispatch")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
-    @Operation(summary = "Điều phối lại",
-               description = "Hủy mission đang chạy, giải phóng xe cũ, tạo mission mới với xe khác")
-    public ResponseEntity<BaseResponse<Map<String, Object>>> redispatch(
-            @PathVariable Integer id,
-            @RequestParam Integer newResourceId) {
-        return ResponseEntity.ok(BaseResponse.success(requestService.redispatch(id, newResourceId)));
-    }
+    // @PostMapping("/{id}/redispatch")
+    // @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    // @Operation(summary = "Điều phối lại",
+    //            description = "Hủy mission đang chạy, giải phóng xe cũ, tạo mission mới với xe khác")
+    // public ResponseEntity<BaseResponse<Map<String, Object>>> redispatch(
+    //         @PathVariable Integer id,
+    //         @RequestParam Integer newResourceId) {
+    //     return ResponseEntity.ok(BaseResponse.success(requestService.redispatch(id, newResourceId)));
+    // }
 
     // ──────────────────────────────────────────────
     // 9. POST /dispatch-requests/{id}/cancel
