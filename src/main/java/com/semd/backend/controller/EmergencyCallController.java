@@ -2,6 +2,8 @@ package com.semd.backend.controller;
 
 import com.semd.backend.service.EmergencyCallService;
 import com.semd.backend.service.IdempotencyService;
+import com.semd.backend.dto.response.TrackingContextResponse;
+import com.semd.backend.service.EmergencyCallTrackingService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,13 +30,15 @@ public class EmergencyCallController {
 
     private final EmergencyCallService callService;
     private final IdempotencyService idempotencyService;
+    private final EmergencyCallTrackingService trackingService;
 
     @org.springframework.beans.factory.annotation.Value("${app.callback-key}")
     private String serverCallbackKey;
 
-    public EmergencyCallController(EmergencyCallService callService, IdempotencyService idempotencyService) {
+    public EmergencyCallController(EmergencyCallService callService, IdempotencyService idempotencyService,EmergencyCallTrackingService trackingService ) {
         this.callService = callService;
         this.idempotencyService = idempotencyService;
+        this.trackingService = trackingService;
     }
 
     @Operation(summary = "Gọi cấp cứu", description = "Tải lên ghi âm cuộc gọi cấp cứu kèm định vị")
@@ -150,5 +154,46 @@ public class EmergencyCallController {
         }
 
         return ResponseEntity.ok(BaseResponse.success(call));
+    }
+
+    @GetMapping("/{callId}/tracking-context")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(
+            summary = "Lấy tracking context của ca cấp cứu",
+            description = "REPORTER dùng để lấy missionId và simulationId. " +
+                    "Polling đến khi missionId != null thì subscribe WebSocket"
+    )
+    public ResponseEntity<BaseResponse<TrackingContextResponse>> getTrackingContext(
+            @PathVariable Integer callId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        EmergencyCallResponse call = callService.getCallDetails(callId)
+                .orElseThrow(() ->
+                        new com.semd.backend.exception.ResourceNotFoundException(
+                                "Không tìm thấy cuộc gọi ID: " + callId));
+
+        // ADMIN / DISPATCHER được phép xem
+        boolean isAdminOrDispatcher = principal.getAuthorities().stream()
+                .anyMatch(a ->
+                        a.getAuthority().equals("ROLE_ADMIN")
+                                || a.getAuthority().equals("ROLE_DISPATCHER"));
+
+        // REPORTER chỉ được xem call của chính mình
+        if (!isAdminOrDispatcher
+                && !call.reporterPhone().equals(principal.getPhoneNumber())) {
+
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(BaseResponse.fail(
+                            "Bạn không có quyền xem tracking của cuộc gọi này",
+                            403));
+        }
+
+        return ResponseEntity.ok(
+                BaseResponse.success(
+                        trackingService.getTrackingContext(callId)));
     }
 }

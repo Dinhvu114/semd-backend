@@ -8,8 +8,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import com.semd.backend.service.DispatchMissionService.MissionException;
-
+import org.springframework.security.access.AccessDeniedException;
+import com.semd.backend.service.DispatchMissionService;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -77,10 +77,11 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
-    @ExceptionHandler(MissionException.class)
-    public ResponseEntity<BaseResponse<Void>> handleMissionException(MissionException ex) {
+
+    @ExceptionHandler(DispatchMissionService.MissionException.class)
+    public ResponseEntity<BaseResponse<Void>> handleMissionException(
+            DispatchMissionService.MissionException ex) {
         BaseResponse<Void> response = BaseResponse.fail(ex.getMessage(), ex.getHttpStatus());
         return new ResponseEntity<>(response, HttpStatus.valueOf(ex.getHttpStatus()));
-
     }
 }

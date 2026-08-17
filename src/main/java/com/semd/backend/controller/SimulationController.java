@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import com.semd.backend.dto.response.RouteGeometryResponse;
 
 @RestController
 @RequestMapping("/api/v1/ambulance-simulations")
@@ -87,5 +88,18 @@ public class SimulationController {
     public ResponseEntity<TrackingResponse> trackingByMission(
             @PathVariable Integer missionId) {
         return ResponseEntity.ok(journeyService.getTrackingByMission(missionId));
+    }
+
+    // Thêm vào cuối class, sau trackingByMission:
+
+    @GetMapping("/{id}/route")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(
+            summary = "Lấy geometry đường đi của simulation",
+            description = "Quyền: REPORTER, DRIVER, DISPATCHER, ADMIN. " +
+                    "FE gọi 1 lần để vẽ polyline, không cần gọi lại mỗi tick"
+    )
+    public ResponseEntity<RouteGeometryResponse> getRoute(@PathVariable Long id) {
+        return ResponseEntity.ok(journeyService.getRoute(id));
     }
 }

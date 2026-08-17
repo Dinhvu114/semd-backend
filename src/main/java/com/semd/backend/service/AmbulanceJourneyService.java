@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import com.semd.backend.dto.response.TrackingResponse;
+import com.semd.backend.dto.response.RouteGeometryResponse;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -291,6 +292,39 @@ public class AmbulanceJourneyService {
         AmbulanceSimulation sim = simulationRepo.findByMissionId(missionId)
                 .orElseThrow(() -> new RuntimeException("SIMULATION_NOT_FOUND_FOR_MISSION: " + missionId));
         return getTracking(sim.getId());
+    }
+
+    // ── Route geometry cho FE vẽ bản đồ ─────────────────────
+    public RouteGeometryResponse getRoute(Long simulationId) {
+        AmbulanceSimulation sim = simulationRepo.findById(simulationId)
+                .orElseThrow(() -> new RuntimeException("SIMULATION_NOT_FOUND: " + simulationId));
+
+        List<SimulationLeg> legs = legRepo.findBySimulationIdOrderBySequenceNo(simulationId);
+
+        List<RouteGeometryResponse.LegGeometry> legGeometries = legs.stream().map(leg -> {
+            RouteGeometryResponse.LegGeometry geo = new RouteGeometryResponse.LegGeometry();
+            geo.setType(leg.getLegType().name());
+            geo.setDistanceMeters(leg.getDistanceM() != null
+                    ? leg.getDistanceM().doubleValue() : null);
+            geo.setDurationSeconds(leg.getDurationS() != null
+                    ? leg.getDurationS().doubleValue() : null);
+            // Parse geometry từ routePayload JSON
+            try {
+                if (leg.getRoutePayload() != null) {
+                    Map<String, Object> geometry = objectMapper.readValue(
+                            leg.getRoutePayload(), new TypeReference<>() {});
+                    geo.setGeometry(geometry);
+                }
+            } catch (Exception e) {
+                log.warn("Không parse được geometry cho leg {}: {}", leg.getId(), e.getMessage());
+            }
+            return geo;
+        }).toList();
+
+        RouteGeometryResponse res = new RouteGeometryResponse();
+        res.setSimulationId(simulationId);
+        res.setLegs(legGeometries);
+        return res;
     }
 
     // ══════════════════════════════════════════════════════
