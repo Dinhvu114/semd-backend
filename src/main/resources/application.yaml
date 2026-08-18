@@ -1,26 +1,28 @@
 jwt:
-  secret: your-256-bit-secret-key-here-change-in-production-THAT-IS-EXTREMELY-L0NG-AND-EASY-TO-REMEMBER-WHATSOVEVER-ANYWAY-TH1S-1S-THE-SECRET-KEY-THE-QUICK-BROWN-FOX-JUMPS-OVER-THE-LAZY-DOG
-  access-token-expiration: 900000
-  refresh-token-expiration: 604800000 
+  secret: ${JWT_SECRET}
+  access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:900000}
+  refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:604800000}
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/semd_db
-    username: postgres
-    password: 123456
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/semd_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:123456}
     driver-class-name: org.postgresql.Driver
+
   redis:
-      host: localhost
-      port: 6379
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
 
   jpa:
     hibernate:
-      ddl-auto: validate   # Flyway quản lý schema, JPA chỉ validate
-    show-sql: true
+      ddl-auto: validate
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
+        format_sql: false
 
   flyway:
     enabled: true
@@ -34,34 +36,37 @@ springdoc:
     path: /v3/api-docs
 
 server:
-  port: 8080
+  port: ${PORT:8080}
 
 # ==========================================
-# MinIO Configuration
+# MinIO
 # ==========================================
 minio:
-  endpoint: http://localhost:9000
-  access-key: admin
-  secret-key: admin123456
-  bucket-name: ems-cad-audio
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:admin}
+  secret-key: ${MINIO_SECRET_KEY:admin123456}
+  bucket-name: ${MINIO_BUCKET_NAME:ems-cad-audio}
 
+# ==========================================
+# App Config
+# ==========================================
 app:
-  callback-key: ems-cad-callback-secret-key-789012
+  callback-key: ${SPRING_BOOT_CALLBACK_KEY:ems-cad-callback-secret-key-789012}
 
- # cấu hình OSRM
   osrm:
     base-url: ${OSRM_BASE_URL:http://localhost:5000}
     profile: driving
-    connect-timeout-ms: 2000
-    read-timeout-ms: 5000
-    max-retries: 2
+    connect-timeout-ms: ${OSRM_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${OSRM_READ_TIMEOUT_MS:5000}
+    max-retries: ${OSRM_MAX_RETRIES:2}
+
   simulation:
     scheduler-pool-size: 4
     default-tick-interval-ms: 1000
     location-log-interval-ms: 5000
     stale-session-threshold-seconds: 30
+
   otp:
-    # mock: trả OTP trong response để FE/demo sử dụng; sms: gọi HTTP SMS provider và ẩn OTP
     delivery-mode: ${OTP_DELIVERY_MODE:mock}
     ttl-seconds: ${OTP_TTL_SECONDS:300}
     resend-cooldown-seconds: ${OTP_RESEND_COOLDOWN_SECONDS:60}
@@ -69,9 +74,8 @@ app:
     max-verification-attempts: ${OTP_MAX_VERIFICATION_ATTEMPTS:5}
     default-country-code: ${OTP_DEFAULT_COUNTRY_CODE:+84}
     hash-secret: ${OTP_HASH_SECRET:${jwt.secret}}
+
   sms:
-    # Adapter mặc định gửi JSON {to, sender, message} và dùng Authorization: Bearer <token>.
-    # Khi chọn nhà cung cấp cụ thể, ánh xạ payload/header trong HttpSmsOtpDeliveryService.
     endpoint: ${SMS_ENDPOINT:}
     api-token: ${SMS_API_TOKEN:}
     sender: ${SMS_SENDER:SEMD}
