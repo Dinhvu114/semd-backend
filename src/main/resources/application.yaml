@@ -1,9 +1,11 @@
 jwt:
   secret: ${JWT_SECRET}
-  access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:900000}
-  refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:604800000}
+  access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION}
+  refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION}
 
 spring:
+  config:
+    import: optional:file:.env[.properties]
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -42,16 +44,16 @@ server:
 # MinIO Configuration
 # ==========================================
 minio:
-  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
-  access-key: ${MINIO_ACCESS_KEY:admin}
-  secret-key: ${MINIO_SECRET_KEY:admin123456}
-  bucket-name: ${MINIO_BUCKET_NAME:ems-cad-audio}
+  endpoint: ${MINIO_ENDPOINT}
+  access-key: ${MINIO_ACCESS_KEY}
+  secret-key: ${MINIO_SECRET_KEY}
+  bucket-name: ${MINIO_BUCKET_NAME}
 
 app:
-  callback-key: ${SPRING_BOOT_CALLBACK_KEY:ems-cad-callback-secret-key-789012}
+  callback-key: ${SPRING_BOOT_CALLBACK_KEY}
 
   osrm:
-    base-url: ${OSRM_BASE_URL:http://localhost:5000}
+    base-url: ${OSRM_BASE_URL}
     profile: driving
     connect-timeout-ms: 2000
     read-timeout-ms: 5000
@@ -64,16 +66,16 @@ app:
     stale-session-threshold-seconds: 30
 
   otp:
-    delivery-mode: ${OTP_DELIVERY_MODE:mock}
-    ttl-seconds: ${OTP_TTL_SECONDS:300}
-    resend-cooldown-seconds: ${OTP_RESEND_COOLDOWN_SECONDS:60}
-    registration-token-ttl-seconds: ${OTP_REGISTRATION_TOKEN_TTL_SECONDS:600}
-    max-verification-attempts: ${OTP_MAX_VERIFICATION_ATTEMPTS:5}
-    default-country-code: ${OTP_DEFAULT_COUNTRY_CODE:+84}
+    delivery-mode: ${OTP_DELIVERY_MODE}
+    ttl-seconds: ${OTP_TTL_SECONDS}
+    resend-cooldown-seconds: ${OTP_RESEND_COOLDOWN_SECONDS}
+    registration-token-ttl-seconds: ${OTP_REGISTRATION_TOKEN_TTL_SECONDS}
+    max-verification-attempts: ${OTP_MAX_VERIFICATION_ATTEMPTS}
+    default-country-code: ${OTP_DEFAULT_COUNTRY_CODE}
     hash-secret: ${OTP_HASH_SECRET:${jwt.secret}}
 
   sms:
     endpoint: ${SMS_ENDPOINT:}
     api-token: ${SMS_API_TOKEN:}
     sender: ${SMS_SENDER:SEMD}
-    message-template: ${SMS_MESSAGE_TEMPLATE:Ma xac thuc SEMD cua ban la %s. Ma co hieu luc trong 5 phut.}
+    message-template: ${SMS_MESSAGE_TEMPLATE}
