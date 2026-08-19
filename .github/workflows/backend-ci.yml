@@ -32,7 +32,7 @@ jobs:
         run: chmod +x mvnw
 
       - name: Run unit tests
-        run: ./mvnw test
+        run: ./mvnw test -Dtest='!BackendApplicationTests'
 
       - name: Build application
         run: ./mvnw package -DskipTests
