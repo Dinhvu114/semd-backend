@@ -1,0 +1,41 @@
+name: Backend CI
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
+    branches:
+      - develop
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      OTP_DELIVERY_MODE: mock
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Give execute permission to Maven wrapper
+        run: chmod +x mvnw
+
+      - name: Run unit tests
+        run: ./mvnw test -Dtest='!BackendApplicationTests'
+
+      - name: Build application
+        run: ./mvnw package -DskipTests
+
+      - name: Build Docker image
+        run: docker build -t semd-backend:ci .
