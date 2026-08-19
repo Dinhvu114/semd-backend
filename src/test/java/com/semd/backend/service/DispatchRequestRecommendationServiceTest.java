@@ -76,7 +76,7 @@ class DispatchRequestRecommendationServiceTest {
     void excludesResourceWithStaleLocation() {
         DispatchRequest request = requestAt(20, 21.0285, 105.8542);
         DispatchResource stale = resourceAt(1, 21.0290, 105.8550, true);
-        stale.setUpdatedAt(LocalDateTime.now().minusMinutes(30));
+        stale.setUpdatedAt(LocalDateTime.now().minusMinutes(31));
 
         when(requestRepository.findById(20)).thenReturn(Optional.of(request));
         when(resourceRepository.findAllByStatus(DispatchResourceStatus.AVAILABLE))
