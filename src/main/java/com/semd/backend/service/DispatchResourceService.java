@@ -59,7 +59,7 @@ public class DispatchResourceService {
             DispatchResourceStatus status,
             Integer serviceTypeId,
             Integer providerId,
-            Integer operationZoneId,
+
             Pageable pageable) {
         Specification<DispatchResource> specification = (root, query, cb) -> cb.conjunction();
         if (keyword != null && !keyword.isBlank()) {
@@ -78,10 +78,7 @@ public class DispatchResourceService {
             specification = specification.and((root, query, cb) ->
                     cb.equal(root.get("provider").get("id"), providerId));
         }
-        if (operationZoneId != null) {
-            specification = specification.and((root, query, cb) ->
-                    cb.equal(root.get("operationZone").get("id"), operationZoneId));
-        }
+
         return repository.findAll(specification, pageable).map(this::mapToDto);
     }
 
@@ -144,15 +141,7 @@ public class DispatchResourceService {
             resource.setResourceType(null);
         }
 
-        if (request.zoneId() != null) {
-            OperationZone operationZone = entityManager.find(OperationZone.class, request.zoneId());
-            if (operationZone == null) {
-                throw new ResourceNotFoundException("Không tìm thấy vùng quản lý với ID: " + request.zoneId());
-            }
-            resource.setOperationZone(operationZone);
-        } else {
-            resource.setOperationZone(null);
-        }
+
 
         if (request.providerId() != null) {
             Provider provider = entityManager.find(Provider.class, request.providerId());
@@ -186,8 +175,9 @@ public class DispatchResourceService {
         Integer typeId = resource.getResourceType() != null ? resource.getResourceType().getId() : null;
         String typeName = resource.getResourceType() != null ? resource.getResourceType().getDisplayName() : null;
 
-        Integer zoneId = resource.getOperationZone() != null ? resource.getOperationZone().getId() : null;
-        String zoneName = resource.getOperationZone() != null ? resource.getOperationZone().getZoneName() : null;
+        // Deprecated - luôn null sau khi bỏ OperationZone
+        Integer zoneId = null;
+        String zoneName = null;
 
         Integer providerId = resource.getProvider() != null ? (resource.getProvider().getId() != null ? resource.getProvider().getId().intValue() : null) : null;
         String providerName = resource.getProvider() != null ? resource.getProvider().getProviderName() : null;

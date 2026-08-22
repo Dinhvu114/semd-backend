@@ -54,16 +54,15 @@ public class DispatchRequestController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     @Operation(summary = "Danh sách hàng đợi điều phối",
-               description = "Lọc và phân trang hàng đợi điều phối, sắp xếp theo thời gian tạo giảm dần")
+            description = "Lọc và phân trang hàng đợi điều phối, sắp xếp theo thời gian tạo giảm dần")
     public ResponseEntity<BaseResponse<List<DispatchRequestDto>>> getAllRequests(
             @Parameter(description = "Lọc theo trạng thái")
             @RequestParam(required = false) DispatchRequestStatus status,
             @RequestParam(required = false) String urgencyLevel,
             @RequestParam(required = false) Integer serviceTypeId,
-            @RequestParam(required = false) Integer zoneId,
             @ParameterObject @ModelAttribute PageRequestDto pagination) {
         Page<DispatchRequestDto> result = requestService.search(
-                status, urgencyLevel, serviceTypeId, zoneId,
+                status, urgencyLevel, serviceTypeId,
                 pagination.toPageable(Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))));
         return ResponseEntity.ok(BaseResponse.success(result.getContent(), Metadata.from(result)));
     }

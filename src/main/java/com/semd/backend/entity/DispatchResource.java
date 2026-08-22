@@ -23,10 +23,6 @@ public class DispatchResource {
     private ServiceType resourceType;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "zone_id")
-    private OperationZone operationZone;
-
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "provider_id")
     private Provider provider;
 
@@ -48,9 +44,6 @@ public class DispatchResource {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt = LocalDateTime.now();
 
-    // @Column(name = "current_driver_id")
-    // private Integer currentDriverId;
-
     // Getters & Setters
     public Integer getId() { return id; }
     public void setId(Integer id) { this.id = id; }
@@ -60,9 +53,6 @@ public class DispatchResource {
 
     public ServiceType getResourceType() { return resourceType; }
     public void setResourceType(ServiceType resourceType) { this.resourceType = resourceType; }
-
-    public OperationZone getOperationZone() { return operationZone; }
-    public void setOperationZone(OperationZone operationZone) { this.operationZone = operationZone; }
 
     public Provider getProvider() { return provider; }
     public void setProvider(Provider provider) { this.provider = provider; }
@@ -81,7 +71,4 @@ public class DispatchResource {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
-
-    //  public Integer getCurrentDriverId() { return currentDriverId; }
-    // public void setCurrentDriverId(Integer currentDriverId) { this.currentDriverId = currentDriverId; }
 }

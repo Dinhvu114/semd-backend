@@ -25,7 +25,6 @@ class EmergencyCallOwnershipServiceTest {
     @Mock SimpMessagingTemplate messagingTemplate;
     @Mock DispatchRequestRepository dispatchRequestRepository;
     @Mock ServiceTypeRepository serviceTypeRepository;
-    @Mock OperationZoneRepository operationZoneRepository;
     @Mock DispatchMissionRepository missionRepository;
     @Mock AmbulanceSimulationRepository simulationRepository;
     @Mock AmbulanceJourneyService ambulanceJourneyService;

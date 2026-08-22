@@ -7,19 +7,18 @@ import jakarta.validation.constraints.Size;
 import java.util.Map;
 
 public record DispatchResourceRequest(
-    @NotBlank(message = "Mã xe cứu thương không được để trống")
-    @Size(max = 50, message = "Mã xe cứu thương không vượt quá 50 ký tự")
-    String resourceCode,
+        @NotBlank(message = "Mã xe cứu thương không được để trống")
+        @Size(max = 50, message = "Mã xe cứu thương không vượt quá 50 ký tự")
+        String resourceCode,
 
-    Integer resourceTypeId,
-    Integer zoneId,
-    Integer providerId,
-    Integer currentDriverId,
+        Integer resourceTypeId,
+        Integer providerId,
+        Integer currentDriverId,
 
-    @NotNull(message = "Trạng thái không được để trống")
-    DispatchResourceStatus status,
+        @NotNull(message = "Trạng thái không được để trống")
+        DispatchResourceStatus status,
 
-    Double longitude,
-    Double latitude,
-    Map<String, Object> extendedAttributes
+        Double longitude,
+        Double latitude,
+        Map<String, Object> extendedAttributes
 ) {}

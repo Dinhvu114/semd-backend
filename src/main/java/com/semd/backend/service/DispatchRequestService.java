@@ -71,16 +71,12 @@ public class DispatchRequestService {
     // 1. GET /dispatch-requests (filter by status, zoneId)
     // ──────────────────────────────────────────────
     @Transactional(readOnly = true)
-    public List<DispatchRequestDto> getAllRequests(DispatchRequestStatus status, Integer zoneId) {
+    public List<DispatchRequestDto> getAllRequests(DispatchRequestStatus status) {
         Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
         List<DispatchRequest> list;
 
-        if (status != null && zoneId != null) {
-            list = requestRepository.findByStatusAndOperationZoneId(status, zoneId, sort);
-        } else if (status != null) {
+        if (status != null) {
             list = requestRepository.findByStatus(status, sort);
-        } else if (zoneId != null) {
-            list = requestRepository.findByOperationZoneId(zoneId, sort);
         } else {
             list = requestRepository.findAll(sort);
         }
@@ -112,7 +108,7 @@ public class DispatchRequestService {
                 req.getStatus() != null ? req.getStatus().name() : null,
                 req.getLongitude(),
                 req.getLatitude(),
-                req.getOperationZone() != null ? req.getOperationZone().getZoneName() : null,
+                null, // zoneName deprecated
                 req.getServiceType() != null ? req.getServiceType().getDisplayName() : null,
                 req.getConfirmedBy() != null ? req.getConfirmedBy().getFullName() : null,
                 req.getConfirmedAt(),
@@ -724,7 +720,6 @@ public class DispatchRequestService {
             DispatchRequestStatus status,
             String urgencyLevel,
             Integer serviceTypeId,
-            Integer operationZoneId,
             Pageable pageable) {
         Specification<DispatchRequest> specification = (root, query, cb) -> cb.conjunction();
         if (status != null) {
@@ -738,13 +733,8 @@ public class DispatchRequestService {
             specification = specification
                     .and((root, query, cb) -> cb.equal(root.get("serviceType").get("id"), serviceTypeId));
         }
-        if (operationZoneId != null) {
-            specification = specification
-                    .and((root, query, cb) -> cb.equal(root.get("operationZone").get("id"), operationZoneId));
-        }
         return requestRepository.findAll(specification, pageable).map(this::mapToDto);
     }
-
     @Transactional(readOnly = true)
     public DispatchRequestDto getRequestById(Integer id) {
         return mapToDto(findById(id));
@@ -813,8 +803,9 @@ public class DispatchRequestService {
         Integer callId = req.getCall() != null ? req.getCall().getId() : null;
         Integer serviceTypeId = req.getServiceType() != null ? req.getServiceType().getId() : null;
         String serviceTypeName = req.getServiceType() != null ? req.getServiceType().getDisplayName() : null;
-        Integer zoneId = req.getOperationZone() != null ? req.getOperationZone().getId() : null;
-        String zoneName = req.getOperationZone() != null ? req.getOperationZone().getZoneName() : null;
+        // Deprecated - luôn null sau khi bỏ OperationZone
+        Integer zoneId = null;
+        String zoneName = null;
         Integer dispatcherId = req.getCreatedByDispatcher() != null ? req.getCreatedByDispatcher().getId() : null;
         String dispatcherName = req.getCreatedByDispatcher() != null ? req.getCreatedByDispatcher().getFullName()
                 : null;

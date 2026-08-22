@@ -24,9 +24,7 @@ public class DispatchRequest {
     @JoinColumn(name = "service_type_id")
     private ServiceType serviceType;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "zone_id")
-    private OperationZone operationZone;
+
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_dispatcher_id")
@@ -108,8 +106,7 @@ public class DispatchRequest {
     public ServiceType getServiceType() { return serviceType; }
     public void setServiceType(ServiceType serviceType) { this.serviceType = serviceType; }
 
-    public OperationZone getOperationZone() { return operationZone; }
-    public void setOperationZone(OperationZone operationZone) { this.operationZone = operationZone; }
+
 
     public User getCreatedByDispatcher() { return createdByDispatcher; }
     public void setCreatedByDispatcher(User createdByDispatcher) { this.createdByDispatcher = createdByDispatcher; }

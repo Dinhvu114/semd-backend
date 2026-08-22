@@ -18,10 +18,6 @@ public interface DispatchRequestRepository extends JpaRepository<DispatchRequest
 
     List<DispatchRequest> findByStatus(DispatchRequestStatus status, Sort sort);
 
-    List<DispatchRequest> findByOperationZoneId(Integer zoneId, Sort sort);
-
-    List<DispatchRequest> findByStatusAndOperationZoneId(DispatchRequestStatus status, Integer zoneId, Sort sort);
-
     long countByStatus(DispatchRequestStatus status);
 
     Optional<DispatchRequest> findFirstByCallIdOrderByCreatedAtDesc(Integer callId);

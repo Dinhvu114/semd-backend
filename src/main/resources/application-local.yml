@@ -1,0 +1,16 @@
+jwt:
+  secret: local-dev-secret-key-minimum-32-characters-long
+
+spring:
+  datasource:
+    password: 123456
+
+app:
+  callback-key: ems-cad-callback-secret-key-789012
+  otp:
+    delivery-mode: mock
+    ttl-seconds: 300
+    resend-cooldown-seconds: 60
+    registration-token-ttl-seconds: 600
+    max-verification-attempts: 5
+    default-country-code: "+84"

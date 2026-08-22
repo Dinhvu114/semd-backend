@@ -50,10 +50,9 @@ public class DispatchResourceController {
             @RequestParam(required = false) DispatchResourceStatus status,
             @RequestParam(required = false) Integer serviceTypeId,
             @RequestParam(required = false) Integer providerId,
-            @RequestParam(required = false) Integer zoneId,
             @ParameterObject @ModelAttribute PageRequestDto pagination) {
         Page<DispatchResourceDto> result = service.search(
-                keyword, status, serviceTypeId, providerId, zoneId,
+                keyword, status, serviceTypeId, providerId,
                 pagination.toPageable(Sort.by(Sort.Order.desc("updatedAt"), Sort.Order.desc("id"))));
         return ResponseEntity.ok(BaseResponse.success(result.getContent(), Metadata.from(result)));
     }

@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.semd.backend.repository.DispatchRequestRepository;
 import com.semd.backend.repository.ServiceTypeRepository;
-import com.semd.backend.repository.OperationZoneRepository;
 import com.semd.backend.repository.DispatchMissionRepository;
 import com.semd.backend.repository.AmbulanceSimulationRepository;
 import com.semd.backend.dto.emergencyCall.CallStatusResponse;
@@ -38,7 +37,6 @@ public class EmergencyCallService {
     private final SimpMessagingTemplate messagingTemplate;
     private final DispatchRequestRepository dispatchRequestRepository;
     private final ServiceTypeRepository serviceTypeRepository;
-    private final OperationZoneRepository operationZoneRepository;
     private final DispatchMissionRepository missionRepository;
     private final AmbulanceSimulationRepository simulationRepository;
     private final AmbulanceJourneyService ambulanceJourneyService;
@@ -52,7 +50,6 @@ public class EmergencyCallService {
                                 SimpMessagingTemplate messagingTemplate,
                                 DispatchRequestRepository dispatchRequestRepository,
                                 ServiceTypeRepository serviceTypeRepository,
-                                OperationZoneRepository operationZoneRepository,
                                 DispatchMissionRepository missionRepository,
                                 AmbulanceSimulationRepository simulationRepository,
                                 AmbulanceJourneyService ambulanceJourneyService) {
@@ -63,7 +60,6 @@ public class EmergencyCallService {
         this.messagingTemplate = messagingTemplate;
         this.dispatchRequestRepository = dispatchRequestRepository;
         this.serviceTypeRepository = serviceTypeRepository;
-        this.operationZoneRepository = operationZoneRepository;
         this.missionRepository = missionRepository;
         this.simulationRepository = simulationRepository;
         this.ambulanceJourneyService = ambulanceJourneyService;
@@ -71,7 +67,7 @@ public class EmergencyCallService {
 
     @Transactional
     public EmergencyCallResponse createEmergencySosCall(String reporterPhone, String reporterName, Double latitude,
-                                                         Double longitude, String description) {
+                                                        Double longitude, String description) {
         EmergencyCall call = new EmergencyCall();
         call.setReporterPhone(reporterPhone);
         call.setReporterName(reporterName);
@@ -79,56 +75,39 @@ public class EmergencyCallService {
         call.setCallType(EmergencyCallType.SOS);
         call.setStatus(EmergencyCallStatus.RECEIVED);
         call.setDescription(normalizeDescription(description));
-        
+
         if (longitude != null && latitude != null) {
             call.setLocation(geometryFactory.createPoint(new Coordinate(longitude, latitude)));
         }
-        
+
         EmergencyCall savedCall = callRepository.save(call);
 
         saveAuditLog(savedCall, longitude, latitude);
-
-        // Tự động tìm Vùng biên chứa tọa độ cuộc gọi
-        OperationZone operationZone = null;
-        if (longitude != null && latitude != null) {
-            operationZone = operationZoneRepository.findContainingZone(longitude, latitude).orElse(null);
-        }
-        // Fallback về vùng hoạt động đầu tiên hoạt động nếu không khớp tọa độ cụ thể
-        if (operationZone == null) {
-            operationZone = operationZoneRepository.findAll().stream().filter(OperationZone::getIsActive).findFirst().orElse(null);
-        }
 
         // Lấy loại hình dịch vụ cơ bản mặc định (BLS)
         ServiceType serviceType = serviceTypeRepository.findByTypeCode("BLS").orElse(null);
 
         // Tự động tạo yêu cầu điều phối (DispatchRequest) cho cuộc gọi SOS khẩn cấp nhanh
+        // Không còn phân vùng theo OperationZone — request mang trực tiếp vị trí sự cố
         DispatchRequest request = new DispatchRequest();
         request.setCall(savedCall);
         request.setServiceType(serviceType);
-        request.setOperationZone(operationZone);
-        request.setUrgencyLevel("CRITICAL"); // Đặt mặc định mức khẩn cấp CRITICAL cho SOS nhanh
+        request.setUrgencyLevel("CRITICAL");
         request.setTargetLocation(savedCall.getLocation());
         request.setStatus(DispatchRequestStatus.PENDING);
         DispatchRequest savedRequest = dispatchRequestRepository.save(request);
 
-        // Phát tán WebSocket tới điều phối viên
         messagingTemplate.convertAndSend("/topic/calls", savedCall);
-        messagingTemplate.convertAndSend("/topic/dispatches", request); // Gửi thêm kênh dispatches cho Dashboard
+        messagingTemplate.convertAndSend("/topic/dispatches", request);
 
         return toResponse(savedCall, savedRequest);
     }
 
-
-    /**
-     * Nhận yêu cầu cuộc gọi thoại khẩn cấp kèm định vị từ người dân.
-     */
     @Transactional
     public EmergencyCallResponse createEmergencyVoiceCall(String reporterPhone, String reporterName, Double latitude,
-                                                           Double longitude, String audioObjectKey, String description) {
-        // 1. Lấy URL công khai của file từ object key
+                                                          Double longitude, String audioObjectKey, String description) {
         String audioUrl = fileStorageService.getPublicUrl(audioObjectKey);
 
-        // 2. Lưu thông tin cuộc gọi mới vào PostgreSQL
         EmergencyCall call = new EmergencyCall();
         call.setReporterPhone(reporterPhone);
         call.setReporterName(reporterName);
@@ -137,25 +116,21 @@ public class EmergencyCallService {
         call.setCallType(EmergencyCallType.CALL);
         call.setStatus(EmergencyCallStatus.RECEIVED);
         call.setDescription(normalizeDescription(description));
-        
+
         if (longitude != null && latitude != null) {
             call.setLocation(geometryFactory.createPoint(new Coordinate(longitude, latitude)));
         }
-        
+
         EmergencyCall savedCall = callRepository.save(call);
 
-        // Ghi Audit Log cho hành động của người báo cáo
         saveAuditLog(savedCall, longitude, latitude);
 
-        // 3. Đẩy thông tin job phân tích AI vào Redis Queue (LPUSH)
         enqueueCallForAI(savedCall.getId(), audioUrl);
 
-        // Phát tán WebSocket tới điều phối viên
         messagingTemplate.convertAndSend("/topic/calls", savedCall);
 
         return toResponse(savedCall, null);
     }
-
 
     private void saveAuditLog(EmergencyCall call, Double longitude, Double latitude) {
         try {
@@ -163,7 +138,7 @@ public class EmergencyCallService {
             auditLog.setTableName("emergency_calls");
             auditLog.setRecordId(call.getId().longValue());
             auditLog.setOperation("INSERT");
-            auditLog.setChangedBy(null); // Người báo cáo/người dùng bên ngoài không có account hệ thống
+            auditLog.setChangedBy(null);
             auditLog.setOldData(null);
             auditLog.setNewData(buildAuditData(call, longitude, latitude));
             auditLog.setChangedAt(LocalDateTime.now());
@@ -187,34 +162,23 @@ public class EmergencyCallService {
         return data;
     }
 
-    /**
-     * Đẩy job vào Redis Queue để FastAPI Worker lấy ra xử lý
-     */
     private void enqueueCallForAI(Integer callId, String audioUrl) {
         try {
             Map<String, Object> jobData = Map.of(
-                "call_id", callId,
-                "audio_url", audioUrl
+                    "call_id", callId,
+                    "audio_url", audioUrl
             );
             String jsonMessage = objectMapper.writeValueAsString(jobData);
-            
-            // LPUSH để xếp hàng đợi
             redisTemplate.opsForList().leftPush("emergency:ai:queue", jsonMessage);
-            
         } catch (Exception e) {
             throw new RuntimeException("Failed to enqueue AI processing job to Redis", e);
         }
     }
 
-    /**
-     * Nhận kết quả callback từ FastAPI và phát tán WebSocket cho điều phối viên.
-     */
     public EmergencyCall handleAICallback(Integer callId, String transcript, String urgency, Double confidence, List<String> symptoms) {
-        // 1. Tìm cuộc gọi trong cơ sở dữ liệu
         EmergencyCall call = callRepository.findById(callId)
                 .orElseThrow(() -> new IllegalArgumentException("Emergency call not found with ID: " + callId));
 
-        // 2. Cập nhật thông tin phân tích từ AI
         call.setAiTranscript(transcript);
         call.setAiUrgencyPrediction(urgency);
         call.setAiConfidenceScore(BigDecimal.valueOf(confidence));
@@ -222,42 +186,27 @@ public class EmergencyCallService {
 
         EmergencyCall updatedCall = callRepository.save(call);
 
-        // 3. Tự động ánh xạ độ khẩn cấp sang mã loại dịch vụ xe cấp cứu (ALS / BLS)
+        // Tự động ánh xạ độ khẩn cấp sang mã loại dịch vụ xe cấp cứu (ALS / BLS)
         String serviceTypeCode = "BLS";
         if ("CRITICAL".equalsIgnoreCase(urgency) || "HIGH".equalsIgnoreCase(urgency)) {
             serviceTypeCode = "ALS";
         }
         ServiceType serviceType = serviceTypeRepository.findByTypeCode(serviceTypeCode).orElse(null);
 
-        // 4. Tìm Vùng biên quản lý (OperationZone) của cuộc gọi cấp cứu
-        Double longitude = call.getLongitude();
-        Double latitude = call.getLatitude();
-        OperationZone operationZone = null;
-        if (longitude != null && latitude != null) {
-            operationZone = operationZoneRepository.findContainingZone(longitude, latitude).orElse(null);
-        }
-        // Fallback về vùng hoạt động đầu tiên hoạt động nếu không khớp
-        if (operationZone == null) {
-            operationZone = operationZoneRepository.findAll().stream().filter(OperationZone::getIsActive).findFirst().orElse(null);
-        }
-
-        // 5. Tự động tạo yêu cầu điều phối (DispatchRequest) liên kết với cuộc gọi cấp cứu
+        // Không còn tìm OperationZone — request mang trực tiếp vị trí sự cố
         DispatchRequest request = new DispatchRequest();
         request.setCall(updatedCall);
         request.setServiceType(serviceType);
-        request.setOperationZone(operationZone);
         request.setUrgencyLevel(urgency);
         request.setTargetLocation(updatedCall.getLocation());
         request.setStatus(DispatchRequestStatus.PENDING);
-        
-        // Lưu danh sách triệu chứng trích xuất từ AI vào extendedRequirements
+
         if (symptoms != null && !symptoms.isEmpty()) {
             request.setExtendedRequirements(Map.of("symptoms", symptoms));
         }
-        
+
         dispatchRequestRepository.save(request);
 
-        // 6. Phát tán WebSocket tới điều phối viên qua các topic tương ứng
         messagingTemplate.convertAndSend("/topic/calls", updatedCall);
         messagingTemplate.convertAndSend("/topic/dispatches", request);
 
@@ -392,4 +341,3 @@ public class EmergencyCallService {
         return description.trim();
     }
 }
-
