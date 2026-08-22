@@ -184,6 +184,14 @@ public class AmbulanceJourneyService {
             throw new RuntimeException("NO_ROUTE_AVAILABLE: tạo lại simulation để có route");
         }
 
+        // ── CHECKPOINT 1: Mission phải đang EN_ROUTE mới cho start ──
+        DispatchMission mission = sim.getMission();
+        if (mission.getStatus() != DispatchMissionStatus.EN_ROUTE) {
+            throw new RuntimeException(
+                    "MISSION_NOT_EN_ROUTE: Driver phải bắt đầu di chuyển trước. "
+                            + "Trạng thái mission hiện tại: " + mission.getStatus());
+        }
+
         sim.setStatus(SimulationStatus.RUNNING);
         sim.setStartedAt(OffsetDateTime.now());
         sim.setRouteIndex(0);
@@ -192,7 +200,6 @@ public class AmbulanceJourneyService {
 
         long intervalMs = sim.getTickIntervalMs();
 
-        // Fix race condition: đăng ký scheduler SAU KHI transaction commit xong
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
@@ -204,6 +211,8 @@ public class AmbulanceJourneyService {
 
         return toResponse(sim);
     }
+
+
 
     // ══════════════════════════════════════════════════════
     // DỪNG MÔ PHỎNG
@@ -229,6 +238,60 @@ public class AmbulanceJourneyService {
 
         publisher.publishEvent(simulationId, sim.getMission().getId(),
                 sim.getResource().getId(), "SIMULATION_STOPPED");
+
+        return toResponse(sim);
+    }
+
+    // ══════════════════════════════════════════════════════
+// CHECKPOINT 3: TIẾP TỤC TỚI BỆNH VIỆN
+// Điều kiện: mission TRANSPORTING + simulation AT_SCENE
+// ══════════════════════════════════════════════════════
+    @Transactional
+    public SimulationResponse continueToHospital(Long simulationId) {
+
+        AmbulanceSimulation sim = simulationRepo.findById(simulationId)
+                .orElseThrow(() -> new RuntimeException("SIMULATION_NOT_FOUND"));
+
+        // Kiểm tra phase đúng
+        if (sim.getPhase() != SimulationPhase.AT_SCENE) {
+            throw new RuntimeException(
+                    "INVALID_PHASE: Simulation phải đang ở AT_SCENE. "
+                            + "Phase hiện tại: " + sim.getPhase());
+        }
+
+        // Kiểm tra status
+        if (sim.getStatus() != SimulationStatus.STOPPED) {
+            throw new RuntimeException(
+                    "INVALID_STATUS: Simulation phải đang STOPPED tại hiện trường. "
+                            + "Status hiện tại: " + sim.getStatus());
+        }
+
+        // Kiểm tra mission đang TRANSPORTING
+        DispatchMission mission = sim.getMission();
+        if (mission.getStatus() != DispatchMissionStatus.TRANSPORTING) {
+            throw new RuntimeException(
+                    "MISSION_NOT_TRANSPORTING: Driver phải bấm 'Bắt đầu vận chuyển' trước. "
+                            + "Trạng thái mission hiện tại: " + mission.getStatus());
+        }
+
+        // Chuyển sang chặng 2
+        sim.setPhase(SimulationPhase.TO_HOSPITAL);
+        sim.setStatus(SimulationStatus.RUNNING);
+        sim.setElapsedRouteMs(0L);
+        simulationRepo.save(sim);
+
+        long intervalMs = sim.getTickIntervalMs();
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                scheduler.schedule(simulationId, () -> tick(simulationId), intervalMs);
+                publisher.publishEvent(simulationId, sim.getMission().getId(),
+                        sim.getResource().getId(), "DEPARTED_TO_HOSPITAL");
+            }
+        });
+
+        log.info("Simulation {} tiếp tục chặng TO_HOSPITAL", simulationId);
 
         return toResponse(sim);
     }
@@ -370,23 +433,28 @@ public class AmbulanceJourneyService {
                                      double currentLon, double currentLat,
                                      Long simulationId) {
         if (sim.getPhase() == SimulationPhase.TO_SCENE) {
-            // Chuyển sang chờ ở hiện trường
+
+            // ── CHECKPOINT 2: Dừng hẳn tại AT_SCENE, không tự chạy tiếp ──
             sim.setPhase(SimulationPhase.AT_SCENE);
             sim.setElapsedRouteMs(0L);
+            sim.setStatus(SimulationStatus.STOPPED); // dừng, chờ Driver TRANSPORTING
             simulationRepo.save(sim);
+
+            scheduler.cancel(simulationId);
+
+            publisher.publishPosition(simulationId, sim.getMission().getId(),
+                    sim.getResource().getId(),
+                    SimulationStatus.STOPPED.name(),
+                    SimulationPhase.AT_SCENE.name(),
+                    currentLon, currentLat, 100.0, 0.0, 0.0);
 
             publisher.publishEvent(simulationId, sim.getMission().getId(),
                     sim.getResource().getId(), "ARRIVED_AT_SCENE");
 
-            // Đợi sceneWaitSeconds rồi chuyển sang chặng 2
-            long waitMs = (long) sim.getSceneWaitSeconds() * 1000L;
-            scheduler.cancel(simulationId);
-            scheduler.scheduleOnce(simulationId, () -> {
-                startToHospitalPhase(simulationId);
-            }, waitMs);
+            log.info("Simulation {} dừng tại AT_SCENE, chờ Driver chuyển TRANSPORTING", simulationId);
 
         } else if (sim.getPhase() == SimulationPhase.TO_HOSPITAL) {
-            // Hoàn thành toàn bộ hành trình
+
             sim.setPhase(SimulationPhase.ARRIVED_HOSPITAL);
             sim.setStatus(SimulationStatus.COMPLETED);
             sim.setCompletedAt(OffsetDateTime.now());

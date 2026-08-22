@@ -83,6 +83,25 @@ public class SimulationManagementController {
         );
     }
 
+    @PostMapping("/{id}/continue")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
+    @Operation(
+            summary = "[DISPATCHER/ADMIN] Tiếp tục mô phỏng tới bệnh viện",
+            description = "Chỉ gọi được khi: simulation đang AT_SCENE + mission đang TRANSPORTING. " +
+                    "Driver phải bấm 'Bắt đầu vận chuyển' trước khi Dispatcher gọi API này."
+    )
+    public ResponseEntity<BaseResponse<SimulationResponse>> continueToHospital(
+            @PathVariable Long id
+    ) {
+        return ResponseEntity.ok(
+                BaseResponse.success(
+                        HttpStatus.OK.value(),
+                        "Tiếp tục mô phỏng tới bệnh viện",
+                        journeyService.continueToHospital(id)
+                )
+        );
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER')")
     @Operation(
