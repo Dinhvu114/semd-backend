@@ -194,6 +194,8 @@ public class ProviderService {
         }
 
         Provider updated = repository.save(provider);
+        newOwner.setProvider(updated);
+        userRepository.save(newOwner);
         return mapToDto(updated);
     }
 
