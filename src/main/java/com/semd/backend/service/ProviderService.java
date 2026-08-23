@@ -5,6 +5,7 @@ import com.semd.backend.dto.ProviderRequest;
 import com.semd.backend.entity.Provider;
 import com.semd.backend.entity.User;
 import com.semd.backend.exception.ResourceNotFoundException;
+import com.semd.backend.repository.DispatchResourceRepository;
 import com.semd.backend.repository.ProviderRepository;
 import com.semd.backend.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -18,37 +19,90 @@ import java.util.stream.Collectors;
 @Service
 public class ProviderService {
 
+    private final DispatchResourceRepository dispatchResourceRepository;
     private final ProviderRepository repository;
     private final UserRepository userRepository;
 
-    public ProviderService(ProviderRepository repository, UserRepository userRepository) {
+    public ProviderService(DispatchResourceRepository dispatchResourceRepository, ProviderRepository repository, UserRepository userRepository) {
+        this.dispatchResourceRepository = dispatchResourceRepository;
         this.repository = repository;
         this.userRepository = userRepository;
     }
 
     @Transactional
-    public ProviderDto createProvider(ProviderRequest request) {
+    public ProviderDto createProvider(
+            ProviderRequest request
+    ) {
         validateProviderRequest(request);
-        if (repository.existsByProviderName(request.providerName())) {
-            throw new IllegalArgumentException("Tên đơn vị nhà xe/phòng khám '" + request.providerName() + "' đã tồn tại");
+
+        if (repository.existsByProviderName(
+                request.providerName()
+        )) {
+            throw new IllegalArgumentException(
+                    "Tên đơn vị nhà xe/phòng khám '"
+                            + request.providerName()
+                            + "' đã tồn tại"
+            );
         }
 
-        User owner = userRepository.findById(request.ownerUserId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chủ sở hữu với ID: " + request.ownerUserId()));
+        User owner = userRepository
+                .findById(request.ownerUserId())
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Không tìm thấy chủ sở hữu với ID: "
+                                        + request.ownerUserId()
+                        )
+                );
+
+        // QUAN TRỌNG
+        validateProviderOwner(owner);
+        validateOwnerAssignment(owner, null);
 
         Provider provider = new Provider();
-        provider.setOwner(owner);
-        provider.setProviderName(request.providerName());
-        provider.setProviderType(request.providerType());
-        provider.setBusinessLicense(request.businessLicense());
-        provider.setContactPhone(request.contactPhone());
-        provider.setContactAddress(request.contactAddress());
-        provider.setCommissionRate(request.commissionRate() != null ? request.commissionRate() : BigDecimal.ZERO);
-        provider.setIsVerified(request.isVerified() != null ? request.isVerified() : false);
-        provider.setIsActive(request.isActive() != null ? request.isActive() : true);
-        provider.setCreatedAt(LocalDateTime.now());
 
-        Provider saved = repository.save(provider);
+        provider.setOwner(owner);
+        provider.setProviderName(
+                request.providerName()
+        );
+        provider.setProviderType(
+                request.providerType()
+        );
+        provider.setBusinessLicense(
+                request.businessLicense()
+        );
+        provider.setContactPhone(
+                request.contactPhone()
+        );
+        provider.setContactAddress(
+                request.contactAddress()
+        );
+        provider.setCommissionRate(
+                request.commissionRate() != null
+                        ? request.commissionRate()
+                        : BigDecimal.ZERO
+        );
+        provider.setIsVerified(
+                request.isVerified() != null
+                        ? request.isVerified()
+                        : false
+        );
+        provider.setIsActive(
+                request.isActive() != null
+                        ? request.isActive()
+                        : true
+        );
+        provider.setCreatedAt(
+                LocalDateTime.now()
+        );
+
+        // 1. Provider phải có ID trước
+        Provider saved =
+                repository.save(provider);
+
+        // 2. Đồng bộ chiều User -> Provider
+        owner.setProvider(saved);
+        userRepository.save(owner);
+
         return mapToDto(saved);
     }
 
@@ -67,19 +121,63 @@ public class ProviderService {
     }
 
     @Transactional
-    public ProviderDto updateProvider(Integer id, ProviderRequest request) {
+    public ProviderDto updateProvider(
+            Integer id,
+            ProviderRequest request
+    ) {
         validateProviderRequest(request);
-        Provider provider = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn vị với ID: " + id));
 
-        if (repository.existsByProviderNameAndIdNot(request.providerName(), id)) {
-            throw new IllegalArgumentException("Tên đơn vị nhà xe/phòng khám '" + request.providerName() + "' đã được sử dụng bởi đơn vị khác");
+        Provider provider =
+                repository.findById(id)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Không tìm thấy đơn vị với ID: "
+                                                + id
+                                )
+                        );
+
+        if (repository.existsByProviderNameAndIdNot(
+                request.providerName(),
+                id
+        )) {
+            throw new IllegalArgumentException(
+                    "Tên đơn vị nhà xe/phòng khám '"
+                            + request.providerName()
+                            + "' đã được sử dụng bởi đơn vị khác"
+            );
         }
 
-        User owner = userRepository.findById(request.ownerUserId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chủ sở hữu với ID: " + request.ownerUserId()));
+        User newOwner = userRepository
+                .findById(request.ownerUserId())
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Không tìm thấy chủ sở hữu với ID: "
+                                        + request.ownerUserId()
+                        )
+                );
 
-        provider.setOwner(owner);
+        validateProviderOwner(newOwner);
+        validateOwnerAssignment(newOwner, id);
+
+        User oldOwner = provider.getOwner();
+            // Nếu đổi sang Owner khác
+        if (oldOwner != null
+                && !oldOwner.getId()
+                        .equals(newOwner.getId())) {
+
+            // Chỉ bỏ provider nếu oldOwner đang thực sự
+            // trỏ vào Provider hiện tại
+            if (oldOwner.getProvider() != null
+                    && id.equals(
+                            oldOwner.getProvider().getId()
+                    )) {
+
+                oldOwner.setProvider(null);
+                userRepository.save(oldOwner);
+            }
+        }
+
+        provider.setOwner(newOwner);
         provider.setProviderName(request.providerName());
         provider.setProviderType(request.providerType());
         provider.setBusinessLicense(request.businessLicense());
@@ -101,10 +199,32 @@ public class ProviderService {
 
     @Transactional
     public void deleteProvider(Integer id) {
-        if (!repository.existsById(id)) {
-            throw new ResourceNotFoundException("Không tìm thấy đơn vị với ID: " + id);
+        Provider provider =
+                repository.findById(id)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Không tìm thấy đơn vị với ID: "
+                                                + id
+                                )
+                        );
+        if (dispatchResourceRepository.existsByProviderId(id)) {
+            throw new IllegalStateException(
+                    "Không thể xóa nhà cung cấp đang còn xe cứu thương"
+            );
         }
-        repository.deleteById(id);
+        User owner = provider.getOwner();
+
+        if (owner != null
+                && owner.getProvider() != null
+                && id.equals(
+                        owner.getProvider().getId()
+                )) {
+
+            owner.setProvider(null);
+            userRepository.save(owner);
+        }
+
+        repository.delete(provider);
     }
 
     private ProviderDto mapToDto(Provider provider) {
@@ -133,5 +253,39 @@ public class ProviderService {
         if (!"TRANSPORT".equals(request.providerType()) && !"CLINIC".equals(request.providerType())) {
             throw new IllegalArgumentException("Loại đơn vị (providerType) chỉ được phép là 'TRANSPORT' hoặc 'CLINIC'");
         }
+    }
+
+    private void validateProviderOwner(User owner) {
+        boolean isProviderAdmin = owner.getRoles()
+                .stream()
+                .anyMatch(role ->
+                        "PROVIDER_ADMIN".equalsIgnoreCase(role.getName())
+                );
+
+        if (!isProviderAdmin) {
+            throw new IllegalArgumentException(
+                    "Chủ sở hữu Provider phải có vai trò PROVIDER_ADMIN"
+            );
+        }
+    }
+    private void validateOwnerAssignment(
+        User owner,
+        Integer currentProviderId
+    ) {
+        if (owner.getProvider() == null) {
+            return;
+        }
+
+        // Khi update chính Provider hiện tại thì vẫn hợp lệ
+        if (currentProviderId != null
+                && currentProviderId.equals(
+                        owner.getProvider().getId()
+                )) {
+            return;
+        }
+
+        throw new IllegalArgumentException(
+                "Tài khoản Provider Admin này đã thuộc một Provider khác"
+        );
     }
 }

@@ -26,7 +26,7 @@ public class ProviderController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROVIDER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Tạo mới đơn vị xe/phòng khám", description = "Đăng ký một đơn vị cung cấp tài nguyên mới liên kết với một người dùng (Owner)")
     public ResponseEntity<BaseResponse<ProviderDto>> createProvider(@Valid @RequestBody ProviderRequest request) {
         ProviderDto result = service.createProvider(request);
@@ -50,7 +50,7 @@ public class ProviderController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROVIDER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Cập nhật thông tin đơn vị cung cấp", description = "Cập nhật thông tin chi tiết của đơn vị cung cấp theo ID")
     public ResponseEntity<BaseResponse<ProviderDto>> updateProvider(
             @PathVariable Integer id,

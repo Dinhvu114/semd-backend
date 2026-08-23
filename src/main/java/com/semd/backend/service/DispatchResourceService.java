@@ -8,6 +8,7 @@ import com.semd.backend.entity.*;
 import com.semd.backend.exception.ResourceNotFoundException;
 import com.semd.backend.repository.DispatchResourceRepository;
 import com.semd.backend.repository.ResourceLocationLogRepository;
+import com.semd.backend.repository.UserRepository;
 
 import jakarta.persistence.EntityManager;
 import org.locationtech.jts.geom.Coordinate;
@@ -27,10 +28,12 @@ import java.util.List;
 import com.semd.backend.repository.DispatchMissionRepository;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.security.access.AccessDeniedException;
 
 @Service
 public class DispatchResourceService {
 
+    private final UserRepository userRepository;
     private final DispatchResourceRepository repository;
     private final EntityManager entityManager;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
@@ -38,7 +41,8 @@ public class DispatchResourceService {
     private final AmbulancePositionPublisher positionPublisher;
     private final ResourceLocationLogRepository locationLogRepository;
 
-    public DispatchResourceService(DispatchResourceRepository repository, EntityManager entityManager, DispatchMissionRepository missionRepository, AmbulancePositionPublisher positionPublisher, ResourceLocationLogRepository locationLogRepository) {
+    public DispatchResourceService(UserRepository userRepository, DispatchResourceRepository repository, EntityManager entityManager, DispatchMissionRepository missionRepository, AmbulancePositionPublisher positionPublisher, ResourceLocationLogRepository locationLogRepository) {
+        this.userRepository = userRepository;
         this.repository = repository;
         this.entityManager = entityManager;
         this.missionRepository = missionRepository;
@@ -47,19 +51,20 @@ public class DispatchResourceService {
     }
 
     @Transactional
-    public DispatchResourceDto createResource(DispatchResourceRequest request) {
+    public DispatchResourceDto createResource(DispatchResourceRequest request, Integer currentUserId) {
         if (repository.existsByResourceCode(request.resourceCode())) {
             throw new IllegalArgumentException("Mã xe cứu thương '" + request.resourceCode() + "' đã tồn tại");
         }
 
         DispatchResource resource = new DispatchResource();
         resource.setResourceCode(request.resourceCode());
-        resource.setStatus(request.status());
+        resource.setStatus(
+        DispatchResourceStatus.AVAILABLE);
         resource.setExtendedAttributes(request.extendedAttributes());
         resource.setUpdatedAt(LocalDateTime.now());
 
         // Map relationships
-        setRelationships(resource, request);
+        setRelationships(resource, request, currentUserId);
 
         DispatchResource saved = repository.save(resource);
         return mapToDto(saved);
@@ -70,9 +75,26 @@ public class DispatchResourceService {
             String keyword,
             DispatchResourceStatus status,
             Integer serviceTypeId,
-            Integer providerId,
-
+            Integer requestedProviderId,
+            Integer currentUserId,
             Pageable pageable) {
+        User currentUser =
+            requireCurrentUser(currentUserId);
+
+        Integer effectiveProviderId =
+                requestedProviderId;
+
+        if (hasRole(currentUser, "PROVIDER_ADMIN")) {
+
+            if (currentUser.getProvider() == null) {
+                throw new AccessDeniedException(
+                        "Tài khoản Provider Admin chưa được gắn nhà cung cấp"
+                );
+            }
+
+        effectiveProviderId =
+                currentUser.getProvider().getId();
+    }
         Specification<DispatchResource> specification = (root, query, cb) -> cb.conjunction();
         if (keyword != null && !keyword.isBlank()) {
             String pattern = "%" + keyword.trim().toLowerCase() + "%";
@@ -86,46 +108,82 @@ public class DispatchResourceService {
             specification = specification.and((root, query, cb) ->
                     cb.equal(root.get("resourceType").get("id"), serviceTypeId));
         }
-        if (providerId != null) {
+        if (effectiveProviderId != null) {
+            Integer finalProviderId = effectiveProviderId;
             specification = specification.and((root, query, cb) ->
-                    cb.equal(root.get("provider").get("id"), providerId));
+                    cb.equal(root.get("provider").get("id"), finalProviderId));
         }
 
         return repository.findAll(specification, pageable).map(this::mapToDto);
     }
 
     @Transactional(readOnly = true)
-    public DispatchResourceDto getResourceById(Integer id) {
-        DispatchResource resource = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe cứu thương với ID: " + id));
+    public DispatchResourceDto getResourceById(
+            Integer id,
+            Integer currentUserId
+    ) {
+        User currentUser =
+                requireCurrentUser(currentUserId);
+
+        DispatchResource resource =
+                repository.findById(id)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Không tìm thấy xe cứu thương với ID: " + id
+                                )
+                        );
+
+        assertProviderOwnership(
+                resource,
+                currentUser
+        );
+
         return mapToDto(resource);
     }
 
     @Transactional
-    public DispatchResourceDto updateResource(Integer id, DispatchResourceRequest request) {
+    public DispatchResourceDto updateResource(Integer id, DispatchResourceRequest request, Integer currentUserId) {
+        User currentUser = requireCurrentUser(currentUserId);
         DispatchResource resource = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe cứu thương với ID: " + id));
+
+        assertProviderOwnership(resource, currentUser);
 
         if (repository.existsByResourceCodeAndIdNot(request.resourceCode(), id)) {
             throw new IllegalArgumentException("Mã xe cứu thương '" + request.resourceCode() + "' đã được sử dụng bởi xe khác");
         }
 
         resource.setResourceCode(request.resourceCode());
-        resource.setStatus(request.status());
         resource.setExtendedAttributes(request.extendedAttributes());
         resource.setUpdatedAt(LocalDateTime.now());
 
         // Map relationships
-        setRelationships(resource, request);
+        setRelationships(resource, request, currentUserId);
 
         DispatchResource updated = repository.save(resource);
         return mapToDto(updated);
     }
 
     @Transactional
-    public DispatchResourceDto updateResourceStatus(Integer id, DispatchResourceStatus status) {
+    public DispatchResourceDto updateResourceStatus(Integer id, DispatchResourceStatus status, Integer currentUserId) {
+        User currentUser = requireCurrentUser(currentUserId);
         DispatchResource resource = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe cứu thương với ID: " + id));
+
+        assertProviderOwnership(resource, currentUser);
+
+        if (status == DispatchResourceStatus.DISPATCHED ||
+                status == DispatchResourceStatus.ON_MISSION) {
+            throw new IllegalArgumentException(
+                    "Không được chuyển thủ công xe sang trạng thái nhiệm vụ"
+            );
+        }
+
+        if (!missionRepository.findActiveMissionsByResourceId(id).isEmpty()) {
+            throw new IllegalStateException(
+                    "Xe đang có nhiệm vụ, không thể thay đổi trạng thái thủ công"
+            );
+        }
 
         resource.setStatus(status);
         resource.setUpdatedAt(LocalDateTime.now());
@@ -135,14 +193,25 @@ public class DispatchResourceService {
     }
 
     @Transactional
-    public void deleteResource(Integer id) {
-        if (!repository.existsById(id)) {
-            throw new ResourceNotFoundException("Không tìm thấy xe cứu thương với ID: " + id);
+    public void deleteResource(Integer id, Integer currentUserId) {
+        User currentUser = requireCurrentUser(currentUserId);
+        DispatchResource resource = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy xe cứu thương với ID: " + id
+                ));
+
+        assertProviderOwnership(resource, currentUser);
+
+        if (!missionRepository.findActiveMissionsByResourceId(id).isEmpty()) {
+            throw new IllegalStateException("Không thể xóa xe đang có nhiệm vụ");
         }
-        repository.deleteById(id);
+
+        repository.delete(resource);
     }
 
-    private void setRelationships(DispatchResource resource, DispatchResourceRequest request) {
+    private void setRelationships(DispatchResource resource, DispatchResourceRequest request, Integer currentUserId) {
+        User currentUser = requireCurrentUser(currentUserId);
+
         if (request.resourceTypeId() != null) {
             ServiceType serviceType = entityManager.find(ServiceType.class, request.resourceTypeId());
             if (serviceType == null) {
@@ -155,22 +224,84 @@ public class DispatchResourceService {
 
 
 
-        if (request.providerId() != null) {
+        if (hasRole(currentUser, "PROVIDER_ADMIN")) {
+            if (currentUser.getProvider() == null) {
+                throw new AccessDeniedException(
+                        "Tài khoản Provider Admin chưa được gắn nhà cung cấp"
+                );
+            }
+            resource.setProvider(currentUser.getProvider());
+        } else if (request.providerId() != null) {
             Provider provider = entityManager.find(Provider.class, request.providerId());
             if (provider == null) {
                 throw new ResourceNotFoundException("Không tìm thấy nhà xe/đơn vị với ID: " + request.providerId());
             }
             resource.setProvider(provider);
         } else {
-            resource.setProvider(null);
+            throw new IllegalArgumentException("Nhà cung cấp là bắt buộc");
         }
 
         if (request.currentDriverId() != null) {
-            User driver = entityManager.find(User.class, request.currentDriverId());
+            User driver = entityManager.find(
+                    User.class,
+                    request.currentDriverId()
+            );
+
             if (driver == null) {
-                throw new ResourceNotFoundException("Không tìm thấy tài xế với ID: " + request.currentDriverId());
+                throw new ResourceNotFoundException(
+                        "Không tìm thấy tài xế với ID: "
+                                + request.currentDriverId()
+                );
             }
+
+            boolean isDriver = driver.getRoles()
+                    .stream()
+                    .anyMatch(role ->
+                            "DRIVER".equalsIgnoreCase(role.getName())
+                    );
+
+            if (!isDriver) {
+                throw new IllegalArgumentException(
+                        "Người dùng được gán phải có vai trò DRIVER"
+                );
+            }
+
+            if (resource.getProvider() == null) {
+                throw new IllegalArgumentException(
+                        "Xe phải thuộc một nhà cung cấp trước khi gán tài xế"
+                );
+            }
+
+            if (driver.getProvider() == null ||
+                    !driver.getProvider().getId()
+                            .equals(resource.getProvider().getId())) {
+
+                throw new IllegalArgumentException(
+                        "Tài xế phải thuộc cùng nhà cung cấp với xe"
+                );
+            }
+
+            boolean alreadyAssigned;
+
+            if (resource.getId() == null) {
+                alreadyAssigned =
+                        repository.existsByCurrentDriverId(driver.getId());
+            } else {
+                alreadyAssigned =
+                        repository.existsByCurrentDriverIdAndIdNot(
+                                driver.getId(),
+                                resource.getId()
+                        );
+            }
+
+            if (alreadyAssigned) {
+                throw new IllegalArgumentException(
+                        "Tài xế này đang được gán cho một xe khác"
+                );
+            }
+
             resource.setCurrentDriver(driver);
+
         } else {
             resource.setCurrentDriver(null);
         }
@@ -223,7 +354,7 @@ public class DispatchResourceService {
         );
     }
 
-    // DRIVER
+    // Cập nhật vị trí theo resourceId
 
     @Transactional
     public void updateLocation(
@@ -255,6 +386,7 @@ public class DispatchResourceService {
         repository.save(resource);
     }
 
+    // DRIVER
     @Transactional
     public void updateMyResourceLocation(
             Integer driverId,
@@ -368,5 +500,34 @@ public class DispatchResourceService {
                 resource.getExtendedAttributes(),
                 resource.getUpdatedAt()
         );
+    }
+    private User requireCurrentUser(Integer userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Không tìm thấy người dùng")
+                );
+    }
+    private void assertProviderOwnership(
+        DispatchResource resource,
+        User currentUser
+    ) {
+        if (!hasRole(currentUser, "PROVIDER_ADMIN")) {
+            return;
+        }
+
+        if (currentUser.getProvider() == null ||
+            resource.getProvider() == null ||
+            !currentUser.getProvider().getId()
+                    .equals(resource.getProvider().getId())) {
+
+            throw new AccessDeniedException(
+                    "Không có quyền thao tác xe của nhà cung cấp khác"
+            );
+        }
+    }
+
+    private boolean hasRole(User user, String roleName) {
+        return user.getRoles().stream()
+                .anyMatch(role -> roleName.equalsIgnoreCase(role.getName()));
     }
 }

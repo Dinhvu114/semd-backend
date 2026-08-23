@@ -10,6 +10,8 @@ import com.semd.backend.exception.ResourceNotFoundException;
 import com.semd.backend.entity.Role;
 import com.semd.backend.repository.RoleRepository;
 import com.semd.backend.repository.UserRepository;
+import com.semd.backend.repository.DispatchMissionRepository;
+import com.semd.backend.repository.DispatchResourceRepository;
 import com.semd.backend.repository.ProviderRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -30,13 +32,18 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final RoleRepository roleRepository;
     private final ProviderRepository providerRepository;
+    private final DispatchResourceRepository dispatchResourceRepository;
+    private final DispatchMissionRepository dispatchMissionRepository;
 
     public UserService(UserRepository repository, PasswordEncoder passwordEncoder, RoleRepository roleRepository,
-                       ProviderRepository providerRepository) {
+                       ProviderRepository providerRepository, DispatchResourceRepository dispatchResourceRepository,
+                        DispatchMissionRepository dispatchMissionRepository) {
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
         this.roleRepository = roleRepository;
         this.providerRepository = providerRepository;
+        this.dispatchResourceRepository = dispatchResourceRepository;
+        this.dispatchMissionRepository = dispatchMissionRepository;
     }
 
     @Transactional
@@ -191,10 +198,45 @@ public class UserService {
 
     @Transactional
     public void deleteUser(Integer id) {
-        if (!repository.existsById(id)) {
-            throw new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + id);
+        User user = repository.findById(id)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Không tìm thấy người dùng với ID: " + id
+                        )
+                );
+
+        boolean isDriver = user.getRoles()
+                .stream()
+                .anyMatch(role ->
+                        "DRIVER".equalsIgnoreCase(role.getName())
+                );
+
+        if (isDriver) {
+
+            boolean assignedToResource =
+                    dispatchResourceRepository
+                            .findByCurrentDriverId(id)
+                            .isPresent();
+
+            if (assignedToResource) {
+                throw new IllegalStateException(
+                        "Không thể xóa tài xế đang được gán cho xe cứu thương"
+                );
+            }
+
+            boolean hasActiveMission =
+                    !dispatchMissionRepository
+                            .findActiveMissionsByDriverId(id)
+                            .isEmpty();
+
+            if (hasActiveMission) {
+                throw new IllegalStateException(
+                        "Không thể xóa tài xế đang có nhiệm vụ hoạt động"
+                );
+            }
         }
-        repository.deleteById(id);
+
+        repository.delete(user);
     }
 
     private UserDto mapToDto(User user) {

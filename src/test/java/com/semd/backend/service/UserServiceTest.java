@@ -7,6 +7,8 @@ import com.semd.backend.entity.Role;
 import com.semd.backend.entity.RoleCode;
 import com.semd.backend.entity.User;
 import com.semd.backend.exception.ResourceNotFoundException;
+import com.semd.backend.repository.DispatchMissionRepository;
+import com.semd.backend.repository.DispatchResourceRepository;
 import com.semd.backend.repository.ProviderRepository;
 import com.semd.backend.repository.RoleRepository;
 import com.semd.backend.repository.UserRepository;
@@ -27,6 +29,8 @@ class UserServiceTest {
     private RoleRepository roleRepository;
     private PasswordEncoder passwordEncoder;
     private UserService service;
+    private DispatchResourceRepository dispatchResourceRepository;
+    private DispatchMissionRepository dispatchMissionRepository;
 
     @BeforeEach
     void setUp() {
@@ -34,7 +38,7 @@ class UserServiceTest {
         providerRepository = mock(ProviderRepository.class);
         roleRepository = mock(RoleRepository.class);
         passwordEncoder = mock(PasswordEncoder.class);
-        service = new UserService(userRepository, passwordEncoder, roleRepository, providerRepository);
+        service = new UserService(userRepository, passwordEncoder, roleRepository, providerRepository, dispatchResourceRepository, dispatchMissionRepository);
 
         when(passwordEncoder.encode(any())).thenReturn("hash");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {

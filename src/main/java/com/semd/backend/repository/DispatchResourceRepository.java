@@ -27,6 +27,14 @@ public interface DispatchResourceRepository extends JpaRepository<DispatchResour
 
     // driver
     Optional<DispatchResource> findByCurrentDriverId(Integer driverId);
+
+    boolean existsByCurrentDriverId(Integer driverId);
+
+    boolean existsByCurrentDriverIdAndIdNot(
+            Integer driverId,
+            Integer resourceId
+    );
+    boolean existsByProviderId(Integer providerId);
 }
 
 

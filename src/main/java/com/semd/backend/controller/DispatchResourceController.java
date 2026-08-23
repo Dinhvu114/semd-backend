@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springdoc.core.annotations.ParameterObject;
+import com.semd.backend.security.UserPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import java.util.List;
 
@@ -37,31 +39,59 @@ public class DispatchResourceController {
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'PROVIDER_ADMIN')")
     @Operation(summary = "Thêm mới xe cứu thương", description = "Tạo mới tài nguyên xe cứu thương / đội ngũ y tế")
-    public ResponseEntity<BaseResponse<DispatchResourceDto>> createResource(@Valid @RequestBody DispatchResourceRequest request) {
-        DispatchResourceDto result = service.createResource(request);
-        return new ResponseEntity<>(BaseResponse.success(result), HttpStatus.CREATED);
+    public ResponseEntity<BaseResponse<DispatchResourceDto>> createResource(
+        @Valid @RequestBody DispatchResourceRequest request,
+        @AuthenticationPrincipal UserPrincipal principal) {
+
+        DispatchResourceDto result =
+                service.createResource(request, principal.getId());
+
+        return new ResponseEntity<>(
+                BaseResponse.success(result),
+                HttpStatus.CREATED
+        );
     }
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER', 'PROVIDER_ADMIN')")
     @Operation(summary = "Lấy danh sách tất cả xe cứu thương", description = "Trả về danh sách toàn bộ các xe cứu thương đang quản lý")
     public ResponseEntity<BaseResponse<List<DispatchResourceDto>>> getAllResources(
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) DispatchResourceStatus status,
-            @RequestParam(required = false) Integer serviceTypeId,
-            @RequestParam(required = false) Integer providerId,
-            @ParameterObject @ModelAttribute PageRequestDto pagination) {
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) DispatchResourceStatus status,
+        @RequestParam(required = false) Integer serviceTypeId,
+        @RequestParam(required = false) Integer providerId,
+        @ParameterObject @ModelAttribute PageRequestDto pagination,
+        @AuthenticationPrincipal UserPrincipal principal) {
         Page<DispatchResourceDto> result = service.search(
-                keyword, status, serviceTypeId, providerId,
-                pagination.toPageable(Sort.by(Sort.Order.desc("updatedAt"), Sort.Order.desc("id"))));
-        return ResponseEntity.ok(BaseResponse.success(result.getContent(), Metadata.from(result)));
+            keyword,
+            status,
+            serviceTypeId,
+            providerId,
+            principal.getId(),
+            pagination.toPageable(
+                    Sort.by(
+                            Sort.Order.desc("updatedAt"),
+                            Sort.Order.desc("id")
+                    )
+            )
+        );
+
+        return ResponseEntity.ok(
+                BaseResponse.success(result.getContent(), Metadata.from(result))
+        );
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'DISPATCHER', 'PROVIDER_ADMIN')")
     @Operation(summary = "Lấy thông tin chi tiết xe cứu thương", description = "Lấy chi tiết thông tin xe cứu thương theo ID")
-    public ResponseEntity<BaseResponse<DispatchResourceDto>> getResourceById(@PathVariable Integer id) {
-        DispatchResourceDto result = service.getResourceById(id);
+    public ResponseEntity<BaseResponse<DispatchResourceDto>> getResourceById(
+        @PathVariable Integer id,
+        @AuthenticationPrincipal UserPrincipal principal) {
+        DispatchResourceDto result =
+        service.getResourceById(
+                id,
+                principal.getId()
+        );
         return ResponseEntity.ok(BaseResponse.success(result));
     }
 
@@ -69,9 +99,15 @@ public class DispatchResourceController {
     @PreAuthorize("hasAnyRole('ADMIN', 'PROVIDER_ADMIN')")
     @Operation(summary = "Cập nhật thông tin xe cứu thương", description = "Cập nhật thông tin chi tiết xe cứu thương theo ID")
     public ResponseEntity<BaseResponse<DispatchResourceDto>> updateResource(
-            @PathVariable Integer id,
-            @Valid @RequestBody DispatchResourceRequest request) {
-        DispatchResourceDto result = service.updateResource(id, request);
+        @PathVariable Integer id,
+        @Valid @RequestBody DispatchResourceRequest request,
+        @AuthenticationPrincipal UserPrincipal principal) {
+        DispatchResourceDto result =
+        service.updateResource(
+                id,
+                request,
+                principal.getId()
+        );
         return ResponseEntity.ok(BaseResponse.success(result));
     }
 
@@ -79,18 +115,33 @@ public class DispatchResourceController {
     @PreAuthorize("hasAnyRole('ADMIN', 'PROVIDER_ADMIN')")
     @Operation(summary = "Thay đổi trạng thái hoạt động của xe", description = "Cập nhật nhanh trạng thái hoạt động (ví dụ: AVAILABLE, BUSY, MAINTENANCE...)")
     public ResponseEntity<BaseResponse<DispatchResourceDto>> updateResourceStatus(
-            @PathVariable Integer id,
-            @Valid @RequestBody ResourceStatusUpdateRequest request) {
-        DispatchResourceDto result = service.updateResourceStatus(id, request.status());
+        @PathVariable Integer id,
+        @Valid @RequestBody ResourceStatusUpdateRequest request,
+        @AuthenticationPrincipal UserPrincipal principal) {
+        DispatchResourceDto result =
+        service.updateResourceStatus(
+                id,
+                request.status(),
+                principal.getId()
+        );
         return ResponseEntity.ok(BaseResponse.success(result));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROVIDER_ADMIN')")
     @Operation(summary = "Xóa xe cứu thương", description = "Xóa xe cứu thương khỏi hệ thống theo ID")
-    public ResponseEntity<BaseResponse<Void>> deleteResource(@PathVariable Integer id) {
-        service.deleteResource(id);
-        return ResponseEntity.ok(BaseResponse.success(null));
+    public ResponseEntity<BaseResponse<Void>> deleteResource(
+        @PathVariable Integer id,
+        @AuthenticationPrincipal UserPrincipal principal) {
+
+        service.deleteResource(
+                id,
+                principal.getId()
+        );
+
+        return ResponseEntity.ok(
+                BaseResponse.success(null)
+        );
     }
     @PatchMapping("/{id}/location")
     @PreAuthorize("hasAnyRole('DISPATCHER')")
