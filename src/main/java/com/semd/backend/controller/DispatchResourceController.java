@@ -76,7 +76,7 @@ public class DispatchResourceController {
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROVIDER_ADMIN', 'DISPATCHER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROVIDER_ADMIN')")
     @Operation(summary = "Thay đổi trạng thái hoạt động của xe", description = "Cập nhật nhanh trạng thái hoạt động (ví dụ: AVAILABLE, BUSY, MAINTENANCE...)")
     public ResponseEntity<BaseResponse<DispatchResourceDto>> updateResourceStatus(
             @PathVariable Integer id,

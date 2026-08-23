@@ -9,6 +9,10 @@ import com.semd.backend.dto.response.SimulationResponse;
 import com.semd.backend.entity.*;
 import com.semd.backend.repository.*;
 import com.semd.backend.util.GeoUtils;
+
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.Point;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -18,6 +22,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import com.semd.backend.dto.response.TrackingResponse;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +41,7 @@ public class AmbulanceJourneyService {
     private final SimulationEventPublisher publisher;
     private final OsrmClient osrmClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final GeometryFactory geometryFactory = new GeometryFactory();
 
     public AmbulanceJourneyService(
             AmbulanceSimulationRepository simulationRepo,
@@ -408,6 +414,22 @@ public class AmbulanceJourneyService {
                 return;
             }
 
+            DispatchResource resource = sim.getResource();
+
+            Point resourcePoint = geometryFactory.createPoint(
+                    new Coordinate(
+                            currentLon,
+                            currentLat
+                    )
+            );
+
+            resourcePoint.setSRID(4326);
+
+            resource.setCurrentLocation(resourcePoint);
+            resource.setUpdatedAt(LocalDateTime.now());
+
+            resourceRepo.save(resource);
+
             // Lưu trạng thái
             simulationRepo.save(sim);
 
@@ -432,6 +454,18 @@ public class AmbulanceJourneyService {
     private void handlePhaseComplete(AmbulanceSimulation sim,
                                      double currentLon, double currentLat,
                                      Long simulationId) {
+        DispatchResource resource = sim.getResource();
+
+        Point resourcePoint = geometryFactory.createPoint(
+                new Coordinate(currentLon, currentLat)
+        );
+
+        resourcePoint.setSRID(4326);
+
+        resource.setCurrentLocation(resourcePoint);
+        resource.setUpdatedAt(LocalDateTime.now());
+
+        resourceRepo.save(resource);
         if (sim.getPhase() == SimulationPhase.TO_SCENE) {
 
             // ── CHECKPOINT 2: Dừng hẳn tại AT_SCENE, không tự chạy tiếp ──

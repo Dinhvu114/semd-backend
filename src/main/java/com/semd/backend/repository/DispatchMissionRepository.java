@@ -57,5 +57,20 @@ public interface DispatchMissionRepository extends JpaRepository<DispatchMission
     List<DispatchMission> findByDriverIdAndStatusIn(
             @Param("driverId") Integer driverId,
             @Param("statuses") List<DispatchMissionStatus> statuses);
+        @Query("""
+        SELECT m FROM DispatchMission m
+        WHERE m.resource.id = :resourceId
+        AND m.status NOT IN (
+                'COMPLETED',
+                'CANCELLED',
+                'FAILED',
+                'TIMEOUT',
+                'REJECTED'
+        )
+        ORDER BY m.dispatchedAt DESC
+        """)
+        List<DispatchMission> findActiveMissionsByResourceId(
+                @Param("resourceId") Integer resourceId
+        );
 
 }

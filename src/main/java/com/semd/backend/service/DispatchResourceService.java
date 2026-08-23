@@ -7,6 +7,8 @@ import com.semd.backend.dto.response.DispatchResourceResponse;
 import com.semd.backend.entity.*;
 import com.semd.backend.exception.ResourceNotFoundException;
 import com.semd.backend.repository.DispatchResourceRepository;
+import com.semd.backend.repository.ResourceLocationLogRepository;
+
 import jakarta.persistence.EntityManager;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -22,16 +24,26 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.semd.backend.repository.DispatchMissionRepository;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
 @Service
 public class DispatchResourceService {
 
     private final DispatchResourceRepository repository;
     private final EntityManager entityManager;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
+    private final DispatchMissionRepository missionRepository;
+    private final AmbulancePositionPublisher positionPublisher;
+    private final ResourceLocationLogRepository locationLogRepository;
 
-    public DispatchResourceService(DispatchResourceRepository repository, EntityManager entityManager) {
+    public DispatchResourceService(DispatchResourceRepository repository, EntityManager entityManager, DispatchMissionRepository missionRepository, AmbulancePositionPublisher positionPublisher, ResourceLocationLogRepository locationLogRepository) {
         this.repository = repository;
         this.entityManager = entityManager;
+        this.missionRepository = missionRepository;
+        this.positionPublisher = positionPublisher;
+        this.locationLogRepository = locationLogRepository;
     }
 
     @Transactional
@@ -269,6 +281,41 @@ public class DispatchResourceService {
         resource.setUpdatedAt(LocalDateTime.now());
 
         repository.save(resource);
+        ResourceLocationLog locationLog =
+        new ResourceLocationLog();
+
+        locationLog.setResource(resource);
+        locationLog.setLocation(point);
+        locationLog.setRecordedAt(LocalDateTime.now());
+
+        locationLogRepository.save(locationLog);
+
+        Integer resourceId = resource.getId();
+
+        Integer missionId =
+                missionRepository.findActiveMissionsByDriverId(driverId)
+                        .stream()
+                        .findFirst()
+                        .map(DispatchMission::getId)
+                        .orElse(null);
+
+        double longitude = request.longitude();
+        double latitude = request.latitude();
+
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        positionPublisher.publish(
+                                resourceId,
+                                missionId,
+                                "GPS",
+                                longitude,
+                                latitude
+                        );
+                    }
+                }
+        );
     }
 
     @Transactional(readOnly = true)
