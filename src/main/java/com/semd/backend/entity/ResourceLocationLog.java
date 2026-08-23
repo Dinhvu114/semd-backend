@@ -23,6 +23,9 @@ public class ResourceLocationLog {
     @Column(name = "speed", precision = 5, scale = 2)
     private BigDecimal speed;
 
+    @Column(name = "source_type", length = 20)
+    private String sourceType;
+
     @Column(name = "recorded_at")
     private LocalDateTime recordedAt = LocalDateTime.now();
 
@@ -38,6 +41,9 @@ public class ResourceLocationLog {
 
     public BigDecimal getSpeed() { return speed; }
     public void setSpeed(BigDecimal speed) { this.speed = speed; }
+
+    public String getSourceType() { return sourceType; }
+    public void setSourceType(String sourceType) { this.sourceType = sourceType; }
 
     public LocalDateTime getRecordedAt() { return recordedAt; }
     public void setRecordedAt(LocalDateTime recordedAt) { this.recordedAt = recordedAt; }

@@ -6,15 +6,17 @@ import com.semd.backend.dto.request.UpdateResourceLocationRequest;
 import com.semd.backend.dto.response.DispatchResourceResponse;
 import com.semd.backend.entity.*;
 import com.semd.backend.exception.ResourceNotFoundException;
+import com.semd.backend.repository.AmbulanceSimulationRepository;
 import com.semd.backend.repository.DispatchResourceRepository;
 import com.semd.backend.repository.ResourceLocationLogRepository;
 import com.semd.backend.repository.UserRepository;
-
 import jakarta.persistence.EntityManager;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
@@ -22,49 +24,80 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
-
-import com.semd.backend.repository.DispatchMissionRepository;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.security.access.AccessDeniedException;
 
 @Service
 public class DispatchResourceService {
 
-    private final UserRepository userRepository;
+    private static final Logger log = LoggerFactory.getLogger(DispatchResourceService.class);
+
     private final DispatchResourceRepository repository;
     private final EntityManager entityManager;
-    private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
-    private final DispatchMissionRepository missionRepository;
-    private final AmbulancePositionPublisher positionPublisher;
+    private final UserRepository userRepository;
+    private final AmbulanceSimulationRepository simulationRepository;
     private final ResourceLocationLogRepository locationLogRepository;
+    private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
-    public DispatchResourceService(UserRepository userRepository, DispatchResourceRepository repository, EntityManager entityManager, DispatchMissionRepository missionRepository, AmbulancePositionPublisher positionPublisher, ResourceLocationLogRepository locationLogRepository) {
-        this.userRepository = userRepository;
+    public DispatchResourceService(
+            DispatchResourceRepository repository,
+            EntityManager entityManager,
+            UserRepository userRepository,
+            AmbulanceSimulationRepository simulationRepository,
+            ResourceLocationLogRepository locationLogRepository) {
         this.repository = repository;
         this.entityManager = entityManager;
-        this.missionRepository = missionRepository;
-        this.positionPublisher = positionPublisher;
+        this.userRepository = userRepository;
+        this.simulationRepository = simulationRepository;
         this.locationLogRepository = locationLogRepository;
     }
 
+    // ══════════════════════════════════════════════════════
+    // HELPER — phân quyền theo Provider
+    // ══════════════════════════════════════════════════════
+    /**
+     * Trả về providerId nếu user hiện tại là chủ 1 provider (PROVIDER_ADMIN),
+     * trả về null nếu user không gắn với provider nào (ADMIN xem toàn bộ).
+     */
+    private Integer resolveScopedProviderId(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng id: " + userId));
+        return user.getProvider() != null ? user.getProvider().getId() : null;
+    }
+
+    private void assertOwnsResource(DispatchResource resource, Integer userId) {
+        Integer scopedProviderId = resolveScopedProviderId(userId);
+        if (scopedProviderId == null) {
+            return; // ADMIN — không giới hạn
+        }
+        Integer resourceProviderId = resource.getProvider() != null ? resource.getProvider().getId() : null;
+        if (!scopedProviderId.equals(resourceProviderId)) {
+            throw new ResourceNotFoundException("Không tìm thấy xe cứu thương với ID: " + resource.getId());
+        }
+    }
+
+    // ══════════════════════════════════════════════════════
+    // CRUD
+    // ══════════════════════════════════════════════════════
     @Transactional
-    public DispatchResourceDto createResource(DispatchResourceRequest request, Integer currentUserId) {
+    public DispatchResourceDto createResource(DispatchResourceRequest request, Integer userId) {
         if (repository.existsByResourceCode(request.resourceCode())) {
             throw new IllegalArgumentException("Mã xe cứu thương '" + request.resourceCode() + "' đã tồn tại");
         }
 
         DispatchResource resource = new DispatchResource();
         resource.setResourceCode(request.resourceCode());
-        resource.setStatus(
-        DispatchResourceStatus.AVAILABLE);
+        resource.setStatus(request.status());
         resource.setExtendedAttributes(request.extendedAttributes());
         resource.setUpdatedAt(LocalDateTime.now());
 
-        // Map relationships
-        setRelationships(resource, request, currentUserId);
+        setRelationships(resource, request);
+
+        // Nếu PROVIDER_ADMIN tạo xe, ép provider của xe = provider của chính mình
+        Integer scopedProviderId = resolveScopedProviderId(userId);
+        if (scopedProviderId != null) {
+            Provider ownProvider = entityManager.find(Provider.class, scopedProviderId);
+            resource.setProvider(ownProvider);
+        }
 
         DispatchResource saved = repository.save(resource);
         return mapToDto(saved);
@@ -75,26 +108,14 @@ public class DispatchResourceService {
             String keyword,
             DispatchResourceStatus status,
             Integer serviceTypeId,
-            Integer requestedProviderId,
-            Integer currentUserId,
+            Integer providerId,
+            Integer userId,
             Pageable pageable) {
-        User currentUser =
-            requireCurrentUser(currentUserId);
 
-        Integer effectiveProviderId =
-                requestedProviderId;
+        Integer scopedProviderId = resolveScopedProviderId(userId);
+        // Nếu là PROVIDER_ADMIN, ép filter về đúng provider của họ (bỏ qua providerId truyền vào nếu khác)
+        Integer effectiveProviderId = scopedProviderId != null ? scopedProviderId : providerId;
 
-        if (hasRole(currentUser, "PROVIDER_ADMIN")) {
-
-            if (currentUser.getProvider() == null) {
-                throw new AccessDeniedException(
-                        "Tài khoản Provider Admin chưa được gắn nhà cung cấp"
-                );
-            }
-
-        effectiveProviderId =
-                currentUser.getProvider().getId();
-    }
         Specification<DispatchResource> specification = (root, query, cb) -> cb.conjunction();
         if (keyword != null && !keyword.isBlank()) {
             String pattern = "%" + keyword.trim().toLowerCase() + "%";
@@ -109,81 +130,54 @@ public class DispatchResourceService {
                     cb.equal(root.get("resourceType").get("id"), serviceTypeId));
         }
         if (effectiveProviderId != null) {
-            Integer finalProviderId = effectiveProviderId;
             specification = specification.and((root, query, cb) ->
-                    cb.equal(root.get("provider").get("id"), finalProviderId));
+                    cb.equal(root.get("provider").get("id"), effectiveProviderId));
         }
 
         return repository.findAll(specification, pageable).map(this::mapToDto);
     }
 
     @Transactional(readOnly = true)
-    public DispatchResourceDto getResourceById(
-            Integer id,
-            Integer currentUserId
-    ) {
-        User currentUser =
-                requireCurrentUser(currentUserId);
-
-        DispatchResource resource =
-                repository.findById(id)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Không tìm thấy xe cứu thương với ID: " + id
-                                )
-                        );
-
-        assertProviderOwnership(
-                resource,
-                currentUser
-        );
-
+    public DispatchResourceDto getResourceById(Integer id, Integer userId) {
+        DispatchResource resource = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe cứu thương với ID: " + id));
+        assertOwnsResource(resource, userId);
         return mapToDto(resource);
     }
 
     @Transactional
-    public DispatchResourceDto updateResource(Integer id, DispatchResourceRequest request, Integer currentUserId) {
-        User currentUser = requireCurrentUser(currentUserId);
+    public DispatchResourceDto updateResource(Integer id, DispatchResourceRequest request, Integer userId) {
         DispatchResource resource = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe cứu thương với ID: " + id));
-
-        assertProviderOwnership(resource, currentUser);
+        assertOwnsResource(resource, userId);
 
         if (repository.existsByResourceCodeAndIdNot(request.resourceCode(), id)) {
             throw new IllegalArgumentException("Mã xe cứu thương '" + request.resourceCode() + "' đã được sử dụng bởi xe khác");
         }
 
         resource.setResourceCode(request.resourceCode());
+        resource.setStatus(request.status());
         resource.setExtendedAttributes(request.extendedAttributes());
         resource.setUpdatedAt(LocalDateTime.now());
 
-        // Map relationships
-        setRelationships(resource, request, currentUserId);
+        setRelationships(resource, request);
+
+        // PROVIDER_ADMIN không được đổi xe sang provider khác
+        Integer scopedProviderId = resolveScopedProviderId(userId);
+        if (scopedProviderId != null) {
+            Provider ownProvider = entityManager.find(Provider.class, scopedProviderId);
+            resource.setProvider(ownProvider);
+        }
 
         DispatchResource updated = repository.save(resource);
         return mapToDto(updated);
     }
 
     @Transactional
-    public DispatchResourceDto updateResourceStatus(Integer id, DispatchResourceStatus status, Integer currentUserId) {
-        User currentUser = requireCurrentUser(currentUserId);
+    public DispatchResourceDto updateResourceStatus(Integer id, DispatchResourceStatus status, Integer userId) {
         DispatchResource resource = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe cứu thương với ID: " + id));
-
-        assertProviderOwnership(resource, currentUser);
-
-        if (status == DispatchResourceStatus.DISPATCHED ||
-                status == DispatchResourceStatus.ON_MISSION) {
-            throw new IllegalArgumentException(
-                    "Không được chuyển thủ công xe sang trạng thái nhiệm vụ"
-            );
-        }
-
-        if (!missionRepository.findActiveMissionsByResourceId(id).isEmpty()) {
-            throw new IllegalStateException(
-                    "Xe đang có nhiệm vụ, không thể thay đổi trạng thái thủ công"
-            );
-        }
+        assertOwnsResource(resource, userId);
 
         resource.setStatus(status);
         resource.setUpdatedAt(LocalDateTime.now());
@@ -193,25 +187,14 @@ public class DispatchResourceService {
     }
 
     @Transactional
-    public void deleteResource(Integer id, Integer currentUserId) {
-        User currentUser = requireCurrentUser(currentUserId);
+    public void deleteResource(Integer id, Integer userId) {
         DispatchResource resource = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Không tìm thấy xe cứu thương với ID: " + id
-                ));
-
-        assertProviderOwnership(resource, currentUser);
-
-        if (!missionRepository.findActiveMissionsByResourceId(id).isEmpty()) {
-            throw new IllegalStateException("Không thể xóa xe đang có nhiệm vụ");
-        }
-
-        repository.delete(resource);
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe cứu thương với ID: " + id));
+        assertOwnsResource(resource, userId);
+        repository.deleteById(id);
     }
 
-    private void setRelationships(DispatchResource resource, DispatchResourceRequest request, Integer currentUserId) {
-        User currentUser = requireCurrentUser(currentUserId);
-
+    private void setRelationships(DispatchResource resource, DispatchResourceRequest request) {
         if (request.resourceTypeId() != null) {
             ServiceType serviceType = entityManager.find(ServiceType.class, request.resourceTypeId());
             if (serviceType == null) {
@@ -222,86 +205,22 @@ public class DispatchResourceService {
             resource.setResourceType(null);
         }
 
-
-
-        if (hasRole(currentUser, "PROVIDER_ADMIN")) {
-            if (currentUser.getProvider() == null) {
-                throw new AccessDeniedException(
-                        "Tài khoản Provider Admin chưa được gắn nhà cung cấp"
-                );
-            }
-            resource.setProvider(currentUser.getProvider());
-        } else if (request.providerId() != null) {
+        if (request.providerId() != null) {
             Provider provider = entityManager.find(Provider.class, request.providerId());
             if (provider == null) {
                 throw new ResourceNotFoundException("Không tìm thấy nhà xe/đơn vị với ID: " + request.providerId());
             }
             resource.setProvider(provider);
         } else {
-            throw new IllegalArgumentException("Nhà cung cấp là bắt buộc");
+            resource.setProvider(null);
         }
 
         if (request.currentDriverId() != null) {
-            User driver = entityManager.find(
-                    User.class,
-                    request.currentDriverId()
-            );
-
+            User driver = entityManager.find(User.class, request.currentDriverId());
             if (driver == null) {
-                throw new ResourceNotFoundException(
-                        "Không tìm thấy tài xế với ID: "
-                                + request.currentDriverId()
-                );
+                throw new ResourceNotFoundException("Không tìm thấy tài xế với ID: " + request.currentDriverId());
             }
-
-            boolean isDriver = driver.getRoles()
-                    .stream()
-                    .anyMatch(role ->
-                            "DRIVER".equalsIgnoreCase(role.getName())
-                    );
-
-            if (!isDriver) {
-                throw new IllegalArgumentException(
-                        "Người dùng được gán phải có vai trò DRIVER"
-                );
-            }
-
-            if (resource.getProvider() == null) {
-                throw new IllegalArgumentException(
-                        "Xe phải thuộc một nhà cung cấp trước khi gán tài xế"
-                );
-            }
-
-            if (driver.getProvider() == null ||
-                    !driver.getProvider().getId()
-                            .equals(resource.getProvider().getId())) {
-
-                throw new IllegalArgumentException(
-                        "Tài xế phải thuộc cùng nhà cung cấp với xe"
-                );
-            }
-
-            boolean alreadyAssigned;
-
-            if (resource.getId() == null) {
-                alreadyAssigned =
-                        repository.existsByCurrentDriverId(driver.getId());
-            } else {
-                alreadyAssigned =
-                        repository.existsByCurrentDriverIdAndIdNot(
-                                driver.getId(),
-                                resource.getId()
-                        );
-            }
-
-            if (alreadyAssigned) {
-                throw new IllegalArgumentException(
-                        "Tài xế này đang được gán cho một xe khác"
-                );
-            }
-
             resource.setCurrentDriver(driver);
-
         } else {
             resource.setCurrentDriver(null);
         }
@@ -318,7 +237,6 @@ public class DispatchResourceService {
         Integer typeId = resource.getResourceType() != null ? resource.getResourceType().getId() : null;
         String typeName = resource.getResourceType() != null ? resource.getResourceType().getDisplayName() : null;
 
-        // Deprecated - luôn null sau khi bỏ OperationZone
         Integer zoneId = null;
         String zoneName = null;
 
@@ -354,39 +272,55 @@ public class DispatchResourceService {
         );
     }
 
-    // Cập nhật vị trí theo resourceId
+    // ══════════════════════════════════════════════════════
+    // DRIVER / DISPATCHER — cập nhật vị trí
+    // ══════════════════════════════════════════════════════
 
+    /**
+     * Dispatcher cập nhật thủ công vị trí xe.
+     * Nếu xe đang có simulation active thì simulation là nguồn currentLocation,
+     * lần cập nhật này chỉ được ghi vào lịch sử, không ghi đè currentLocation.
+     */
     @Transactional
     public void updateLocation(
             Integer resourceId,
             UpdateResourceLocationRequest request
     ) {
-
         DispatchResource resource =
                 repository.findById(resourceId)
                         .orElseThrow(() ->
                                 new ResourceNotFoundException(
-                                        "Không tìm thấy phương tiện với id = "
-                                                + resourceId
+                                        "Không tìm thấy phương tiện với id = " + resourceId
                                 )
                         );
 
         Point point = geometryFactory.createPoint(
-                new Coordinate(
-                        request.longitude(),
-                        request.latitude()
-                )
+                new Coordinate(request.longitude(), request.latitude())
         );
-
         point.setSRID(4326);
+
+        boolean hasActiveSimulation = hasActiveSimulation(resourceId);
+
+        saveLocationLog(resource, point, "MANUAL");
+
+        if (hasActiveSimulation) {
+            log.info("Bỏ qua cập nhật currentLocation cho resource {} vì simulation đang active.",
+                    resourceId);
+            return;
+        }
 
         resource.setCurrentLocation(point);
         resource.setUpdatedAt(LocalDateTime.now());
-
         repository.save(resource);
     }
 
-    // DRIVER
+    /**
+     * Driver tự cập nhật vị trí GPS từ mobile.
+     * Khi simulation đang active (READY/RUNNING/STOPPED), simulation là nguồn
+     * ghi currentLocation duy nhất — GPS mobile vẫn được lưu lịch sử nhưng
+     * không ghi đè currentLocation để tránh xung đột với tick.
+     * Không dùng pessimistic lock ở đây để tránh deadlock với transaction tick().
+     */
     @Transactional
     public void updateMyResourceLocation(
             Integer driverId,
@@ -401,53 +335,39 @@ public class DispatchResourceService {
                         );
 
         Point point = geometryFactory.createPoint(
-                new Coordinate(
-                        request.longitude(),
-                        request.latitude()
-                )
+                new Coordinate(request.longitude(), request.latitude())
         );
-
         point.setSRID(4326);
+
+        boolean hasActiveSimulation = hasActiveSimulation(resource.getId());
+
+        saveLocationLog(resource, point, "REAL_GPS");
+
+        if (hasActiveSimulation) {
+            log.info("Bỏ qua cập nhật currentLocation cho resource {} vì simulation đang active. "
+                    + "GPS mobile vẫn được lưu lịch sử.", resource.getId());
+            return;
+        }
 
         resource.setCurrentLocation(point);
         resource.setUpdatedAt(LocalDateTime.now());
-
         repository.save(resource);
-        ResourceLocationLog locationLog =
-        new ResourceLocationLog();
+    }
 
+    private boolean hasActiveSimulation(Integer resourceId) {
+        return simulationRepository.findByResourceIdAndStatusIn(
+                resourceId,
+                List.of(SimulationStatus.READY, SimulationStatus.RUNNING, SimulationStatus.STOPPED)
+        ).isPresent();
+    }
+
+    private void saveLocationLog(DispatchResource resource, Point point, String sourceType) {
+        ResourceLocationLog locationLog = new ResourceLocationLog();
         locationLog.setResource(resource);
+        locationLog.setSourceType(sourceType);
         locationLog.setLocation(point);
         locationLog.setRecordedAt(LocalDateTime.now());
-
         locationLogRepository.save(locationLog);
-
-        Integer resourceId = resource.getId();
-
-        Integer missionId =
-                missionRepository.findActiveMissionsByDriverId(driverId)
-                        .stream()
-                        .findFirst()
-                        .map(DispatchMission::getId)
-                        .orElse(null);
-
-        double longitude = request.longitude();
-        double latitude = request.latitude();
-
-        TransactionSynchronizationManager.registerSynchronization(
-                new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        positionPublisher.publish(
-                                resourceId,
-                                missionId,
-                                "GPS",
-                                longitude,
-                                latitude
-                        );
-                    }
-                }
-        );
     }
 
     @Transactional(readOnly = true)
@@ -463,8 +383,9 @@ public class DispatchResourceService {
 
         return toResponse(resource);
     }
+
     private DispatchResourceResponse toResponse(
-        DispatchResource resource
+            DispatchResource resource
     ) {
         Double latitude = null;
         Double longitude = null;
@@ -500,34 +421,5 @@ public class DispatchResourceService {
                 resource.getExtendedAttributes(),
                 resource.getUpdatedAt()
         );
-    }
-    private User requireCurrentUser(Integer userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Không tìm thấy người dùng")
-                );
-    }
-    private void assertProviderOwnership(
-        DispatchResource resource,
-        User currentUser
-    ) {
-        if (!hasRole(currentUser, "PROVIDER_ADMIN")) {
-            return;
-        }
-
-        if (currentUser.getProvider() == null ||
-            resource.getProvider() == null ||
-            !currentUser.getProvider().getId()
-                    .equals(resource.getProvider().getId())) {
-
-            throw new AccessDeniedException(
-                    "Không có quyền thao tác xe của nhà cung cấp khác"
-            );
-        }
-    }
-
-    private boolean hasRole(User user, String roleName) {
-        return user.getRoles().stream()
-                .anyMatch(role -> roleName.equalsIgnoreCase(role.getName()));
     }
 }
