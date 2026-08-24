@@ -12,6 +12,7 @@ public record DispatchRequestDetailDto(
         String reporterPhone,
         String reporterName,
         String audioUrl,
+        String description,
         // AI Result
         String aiTranscript,
         String aiUrgencyPrediction,

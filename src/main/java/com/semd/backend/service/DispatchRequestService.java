@@ -99,6 +99,7 @@ public class DispatchRequestService {
                 call != null ? call.getReporterPhone() : null,
                 call != null ? call.getReporterName() : null,
                 call != null ? call.getAudioUrl() : null,
+                call != null ? call.getDescription() : null,
                 call != null ? call.getAiTranscript() : null,
                 call != null ? call.getAiUrgencyPrediction() : null,
                 call != null ? call.getAiConfidenceScore() : null,
