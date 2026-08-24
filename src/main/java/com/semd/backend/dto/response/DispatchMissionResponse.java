@@ -19,6 +19,10 @@ public class DispatchMissionResponse {
     private String cancelReason;
     private LocalDateTime acceptedAt;
     private LocalDateTime completedAt;
+    private Integer destinationId;
+    private Double destinationLatitude;
+    private Double destinationLongitude;
+    private String destinationAddress;
 
     // Getters & Setters
     public Integer getId() { return id; }
@@ -52,4 +56,34 @@ public class DispatchMissionResponse {
     public void setAcceptedAt(LocalDateTime acceptedAt) { this.acceptedAt = acceptedAt; }
     public LocalDateTime getCompletedAt() { return completedAt; }
     public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
+    public Integer getDestinationId() {
+        return destinationId;
+    }
+
+    public void setDestinationId(Integer destinationId) {
+        this.destinationId = destinationId;
+    }
+    public Double getDestinationLatitude() {
+    return destinationLatitude;
+    }
+
+    public void setDestinationLatitude(Double destinationLatitude) {
+        this.destinationLatitude = destinationLatitude;
+    }
+
+    public Double getDestinationLongitude() {
+        return destinationLongitude;
+    }
+
+    public void setDestinationLongitude(Double destinationLongitude) {
+        this.destinationLongitude = destinationLongitude;
+    }
+
+    public String getDestinationAddress() {
+        return destinationAddress;
+    }
+
+    public void setDestinationAddress(String destinationAddress) {
+        this.destinationAddress = destinationAddress;
+    }
 }

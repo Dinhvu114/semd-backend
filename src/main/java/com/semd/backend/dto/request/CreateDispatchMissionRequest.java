@@ -12,6 +12,7 @@ public class CreateDispatchMissionRequest {
 
     private String destinationName;
     private String notes;
+    private Integer destinationId; // thêm bệnh viện đích
 
     // Getters & Setters
     public Integer getRequestId() { return requestId; }
@@ -22,4 +23,11 @@ public class CreateDispatchMissionRequest {
     public void setDestinationName(String destinationName) { this.destinationName = destinationName; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+    public Integer getDestinationId() {
+        return destinationId;
+    }
+
+    public void setDestinationId(Integer destinationId) {
+        this.destinationId = destinationId;
+    }
 }

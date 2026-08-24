@@ -34,18 +34,22 @@ public class DispatchMissionService {
     private final DispatchResourceRepository resourceRepository;
     private final MissionStatusLogRepository statusLogRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final MedicalHospitalRepository hospitalRepository;
 
     public DispatchMissionService(
             DispatchMissionRepository missionRepository,
             DispatchRequestRepository requestRepository,
             DispatchResourceRepository resourceRepository,
             MissionStatusLogRepository statusLogRepository,
-            SimpMessagingTemplate messagingTemplate) {
+            SimpMessagingTemplate messagingTemplate,
+                MedicalHospitalRepository hospitalRepository) {
         this.missionRepository = missionRepository;
         this.requestRepository = requestRepository;
         this.resourceRepository = resourceRepository;
         this.statusLogRepository = statusLogRepository;
         this.messagingTemplate = messagingTemplate;
+        this.hospitalRepository = hospitalRepository;
+
     }
 
     // ══════════════════════════════════════════════════════
@@ -89,6 +93,20 @@ public class DispatchMissionService {
             throw new MissionException(409, "RESOURCE_HAS_ACTIVE_MISSION",
                     "Xe đang có nhiệm vụ chưa hoàn thành");
         }
+        MedicalHospital destination = null;
+
+        if (req.getDestinationId() != null) {
+        destination = hospitalRepository
+                .findById(req.getDestinationId())
+                .orElseThrow(() ->
+                        new MissionException(
+                                404,
+                                "DESTINATION_NOT_FOUND",
+                                "Không tìm thấy bệnh viện id: "
+                                        + req.getDestinationId()
+                        )
+                );
+        }
 
         // 7. Chuyển request sang DISPATCHING (đang trong quá trình giao)
         request.setStatus(DispatchRequestStatus.DISPATCHING);
@@ -98,7 +116,13 @@ public class DispatchMissionService {
         DispatchMission mission = new DispatchMission();
         mission.setRequest(request);
         mission.setResource(resource);
-        mission.setDestinationName(req.getDestinationName());
+        mission.setDestination(destination);
+
+        mission.setDestinationName(
+                destination != null
+                        ? destination.getHospitalName()
+                        : req.getDestinationName()
+        );
         mission.setNotes(req.getNotes());
         mission.setStatus(DispatchMissionStatus.DISPATCHED);
         mission.setDispatchedAt(LocalDateTime.now());
@@ -263,7 +287,13 @@ public class DispatchMissionService {
     public DispatchMissionResponse startTransport(Integer missionId, Integer driverId) {
         DispatchMission mission = getOwnedMissionForUpdate(missionId, driverId);
         assertStatus(mission, DispatchMissionStatus.ARRIVED_SCENE, "start-transport");
-
+         if (mission.getDestination() == null) {
+        throw new MissionException(
+                409,
+                "DESTINATION_NOT_SELECTED",
+                "Chưa chọn bệnh viện đích cho nhiệm vụ"
+        );
+    }
         mission.setStatus(DispatchMissionStatus.TRANSPORTING);
         mission.setStartTransportAt(LocalDateTime.now());
         DispatchMission saved = missionRepository.save(mission);
@@ -329,7 +359,7 @@ public class DispatchMissionService {
     }
 
     // ══════════════════════════════════════════════════════
-    // DISPATCHER: REDISPATCH — điều xe khác khi driver từ chối
+    // DISPATCHER: REDISPATCH — điều xe khác khi driver từ chối. Chỉ thay nhiệm vụ cũ và giữ điểm đến
     // ══════════════════════════════════════════════════════
     @Transactional
     public DispatchMissionResponse redispatch(Integer requestId, Integer newResourceId) {
@@ -346,22 +376,41 @@ public class DispatchMissionService {
                             + "Trạng thái hiện tại: " + request.getStatus());
         }
 
-        // 3. Huỷ mission cũ nếu còn active
-        missionRepository.findActiveMissionByRequestId(requestId).ifPresent(oldMission -> {
-            DispatchMissionStatus oldStatus = oldMission.getStatus(); // lưu trước khi đổi
+        // 3. Lấy mission cũ để giữ lại bệnh viện đích khi redispatch, sau đó mới hủy nhiệm vụ cũ
+        DispatchMission oldMission =
+                missionRepository.findActiveMissionByRequestId(requestId)
+                        .orElse(null);
 
-            oldMission.setStatus(DispatchMissionStatus.CANCELLED);
-            missionRepository.save(oldMission);
+        MedicalHospital destination =
+                oldMission != null
+                        ? oldMission.getDestination()
+                        : null;
 
-            // Giải phóng xe cũ
-            DispatchResource oldResource = oldMission.getResource();
-            oldResource.setStatus(DispatchResourceStatus.AVAILABLE);
-            resourceRepository.save(oldResource);
+        String destinationName =
+                oldMission != null
+                        ? oldMission.getDestinationName()
+                        : null;
 
-            // Log đúng oldStatus
-            saveLog(oldMission, oldStatus, DispatchMissionStatus.CANCELLED,
-                    "Huỷ để điều xe mới");
-        });
+        // Huỷ mission cũ nếu có
+        if (oldMission != null) {
+        DispatchMissionStatus oldStatus = oldMission.getStatus();
+
+        oldMission.setStatus(DispatchMissionStatus.CANCELLED);
+        missionRepository.save(oldMission);
+
+        // Giải phóng xe cũ
+        DispatchResource oldResource = oldMission.getResource();
+        oldResource.setStatus(DispatchResourceStatus.AVAILABLE);
+        resourceRepository.save(oldResource);
+
+        // Log
+        saveLog(
+                oldMission,
+                oldStatus,
+                DispatchMissionStatus.CANCELLED,
+                "Huỷ để điều xe mới"
+        );
+        }
 
         // 4. Lấy xe mới + LOCK
         DispatchResource newResource = resourceRepository
@@ -378,6 +427,8 @@ public class DispatchMissionService {
         DispatchMission newMission = new DispatchMission();
         newMission.setRequest(request);
         newMission.setResource(newResource);
+        newMission.setDestination(destination);
+        newMission.setDestinationName(destinationName);
         newMission.setStatus(DispatchMissionStatus.DISPATCHED);
         newMission.setDispatchedAt(LocalDateTime.now()); // timestamp đầy đủ
         DispatchMission saved = missionRepository.save(newMission);
@@ -509,7 +560,24 @@ public class DispatchMissionService {
         res.setId(m.getId());
         res.setRequestId(m.getRequest().getId());
         res.setResourceId(m.getResource().getId());
-        res.setDestinationName(m.getDestinationName());
+        if (m.getDestination() != null) {
+                MedicalHospital destination = m.getDestination();
+
+                res.setDestinationId(destination.getId());
+                res.setDestinationName(destination.getHospitalName());
+                res.setDestinationAddress(destination.getHospitalAddress());
+
+                if (destination.getLocation() != null) {
+                        res.setDestinationLatitude(
+                                destination.getLocation().getY()
+                        );
+                        res.setDestinationLongitude(
+                                destination.getLocation().getX()
+                        );
+                }
+        } else {
+                res.setDestinationName(m.getDestinationName());
+        }
         res.setStatus(m.getStatus().name());
         res.setDispatchedAt(m.getDispatchedAt());
         res.setAcceptedAt(m.getAcceptedAt());
