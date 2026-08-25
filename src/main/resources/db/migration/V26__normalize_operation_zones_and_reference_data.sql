@@ -20,12 +20,7 @@ BEGIN
 END
 $$;
 
-ALTER TABLE public.operation_zones
-    RENAME CONSTRAINT edge_nodes_pkey TO operation_zones_pkey;
-ALTER TABLE public.operation_zones
-    RENAME CONSTRAINT edge_nodes_id_not_null TO operation_zones_id_not_null;
-ALTER TABLE public.operation_zones
-    RENAME CONSTRAINT edge_nodes_node_name_not_null TO operation_zones_zone_name_not_null;
+
 
 ALTER INDEX public.idx_edge_nodes_coverage RENAME TO idx_operation_zones_coverage;
 
