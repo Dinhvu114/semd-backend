@@ -1,12 +1,18 @@
 jwt:
   secret: local-dev-secret-key-minimum-32-characters-long
+  access-token-expiration: 900000
+  refresh-token-expiration: 604800000
 
 spring:
   datasource:
+    url: jdbc:postgresql://localhost:5432/semd_db
+    username: postgres
     password: 123456
 
 app:
   callback-key: ems-cad-callback-secret-key-789012
+  osrm:
+    base-url: http://localhost:5000
   otp:
     delivery-mode: mock
     ttl-seconds: 300
@@ -14,3 +20,9 @@ app:
     registration-token-ttl-seconds: 600
     max-verification-attempts: 5
     default-country-code: "+84"
+
+minio:
+  endpoint: http://localhost:9000
+  access-key: admin
+  secret-key: admin123456
+  bucket-name: ems-cad-audio
