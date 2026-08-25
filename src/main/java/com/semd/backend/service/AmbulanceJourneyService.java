@@ -15,6 +15,7 @@ import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -40,6 +41,7 @@ public class AmbulanceJourneyService {
     private final SimulationScheduler scheduler;
     private final SimulationEventPublisher publisher;
     private final OsrmClient osrmClient;
+    private final ApplicationContext applicationContext;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final GeometryFactory geometryFactory = new GeometryFactory();
 
@@ -51,7 +53,8 @@ public class AmbulanceJourneyService {
             MedicalHospitalRepository hospitalRepo,
             SimulationScheduler scheduler,
             SimulationEventPublisher publisher,
-            OsrmClient osrmClient) {
+            OsrmClient osrmClient,
+            ApplicationContext applicationContext) {
         this.simulationRepo = simulationRepo;
         this.legRepo = legRepo;
         this.missionRepo = missionRepo;
@@ -60,6 +63,13 @@ public class AmbulanceJourneyService {
         this.scheduler = scheduler;
         this.publisher = publisher;
         this.osrmClient = osrmClient;
+        this.applicationContext = applicationContext;
+    }
+
+    // Lấy đúng Spring proxy của chính class này để @Transactional hoạt động
+    // khi gọi self-invocation từ trong lambda của scheduler
+    private AmbulanceJourneyService self() {
+        return applicationContext.getBean(AmbulanceJourneyService.class);
     }
 
     // ══════════════════════════════════════════════════════
@@ -75,7 +85,6 @@ public class AmbulanceJourneyService {
         MedicalHospital hospital = hospitalRepo.findById(req.getHospitalId())
                 .orElseThrow(() -> new RuntimeException("HOSPITAL_NOT_FOUND: " + req.getHospitalId()));
 
-        // Validate tọa độ tồn tại
         if (resource.getCurrentLocation() == null) {
             throw new RuntimeException("RESOURCE_LOCATION_MISSING: xe chưa có tọa độ hiện tại");
         }
@@ -86,7 +95,6 @@ public class AmbulanceJourneyService {
             throw new RuntimeException("HOSPITAL_LOCATION_MISSING: bệnh viện chưa có tọa độ");
         }
 
-        // Kiểm tra xe không có phiên đang chạy
         simulationRepo.findByResourceIdAndStatusIn(
                 resource.getId(),
                 List.of(SimulationStatus.READY, SimulationStatus.RUNNING, SimulationStatus.STOPPED)
@@ -94,7 +102,6 @@ public class AmbulanceJourneyService {
             throw new RuntimeException("SIMULATION_ALREADY_ACTIVE_FOR_RESOURCE");
         });
 
-        // Tạo phiên
         AmbulanceSimulation sim = new AmbulanceSimulation();
         sim.setMission(mission);
         sim.setResource(resource);
@@ -109,7 +116,6 @@ public class AmbulanceJourneyService {
 
         AmbulanceSimulation saved = simulationRepo.save(sim);
 
-        // ── Lấy tọa độ thật từ entity ──────────────────────
         double resourceLon = GeoUtils.lon(resource.getCurrentLocation());
         double resourceLat = GeoUtils.lat(resource.getCurrentLocation());
         double sceneLon    = GeoUtils.lon(mission.getRequest().getTargetLocation());
@@ -117,13 +123,9 @@ public class AmbulanceJourneyService {
         double hospitalLon = GeoUtils.lon(hospital.getLocation());
         double hospitalLat = GeoUtils.lat(hospital.getLocation());
 
-        // ── Gọi OSRM với tọa độ thật ───────────────────────
         try {
-            // Chặng 1: xe → hiện trường
             OsrmRouteResponse leg1Route = osrmClient.getRoute(
-                    resourceLon, resourceLat,
-                    sceneLon, sceneLat
-            );
+                    resourceLon, resourceLat, sceneLon, sceneLat);
             SimulationLeg leg1 = new SimulationLeg();
             leg1.setSimulation(saved);
             leg1.setLegType(LegType.TO_SCENE);
@@ -134,11 +136,8 @@ public class AmbulanceJourneyService {
                     leg1Route.getRoutes().get(0).getGeometry()));
             legRepo.save(leg1);
 
-            // Chặng 2: hiện trường → bệnh viện
             OsrmRouteResponse leg2Route = osrmClient.getRoute(
-                    sceneLon, sceneLat,
-                    hospitalLon, hospitalLat
-            );
+                    sceneLon, sceneLat, hospitalLon, hospitalLat);
             SimulationLeg leg2 = new SimulationLeg();
             leg2.setSimulation(saved);
             leg2.setLegType(LegType.TO_HOSPITAL);
@@ -155,7 +154,6 @@ public class AmbulanceJourneyService {
                     leg2Route.getRoutes().get(0).getDistance().intValue());
 
         } catch (Exception e) {
-            // OSRM lỗi → đánh FAILED, không cho start
             saved.setStatus(SimulationStatus.FAILED);
             saved.setErrorCode("OSRM_UNAVAILABLE");
             saved.setErrorMessage(e.getMessage());
@@ -167,7 +165,7 @@ public class AmbulanceJourneyService {
     }
 
     // ══════════════════════════════════════════════════════
-    // BẮT ĐẦU MÔ PHỎNG — fix race condition bằng afterCommit
+    // BẮT ĐẦU MÔ PHỎNG
     // ══════════════════════════════════════════════════════
     @Transactional
     public SimulationResponse startSimulation(Long simulationId) {
@@ -176,7 +174,7 @@ public class AmbulanceJourneyService {
                 .orElseThrow(() -> new RuntimeException("SIMULATION_NOT_FOUND"));
 
         if (sim.getStatus() == SimulationStatus.RUNNING) {
-            return toResponse(sim); // idempotent
+            return toResponse(sim);
         }
 
         if (sim.getStatus() != SimulationStatus.READY
@@ -184,13 +182,11 @@ public class AmbulanceJourneyService {
             throw new RuntimeException("INVALID_SIMULATION_STATE: " + sim.getStatus());
         }
 
-        // Kiểm tra có legs chưa
         List<SimulationLeg> legs = legRepo.findBySimulationIdOrderBySequenceNo(simulationId);
         if (legs.isEmpty()) {
             throw new RuntimeException("NO_ROUTE_AVAILABLE: tạo lại simulation để có route");
         }
 
-        // ── CHECKPOINT 1: Mission phải đang EN_ROUTE mới cho start ──
         DispatchMission mission = sim.getMission();
         if (mission.getStatus() != DispatchMissionStatus.EN_ROUTE) {
             throw new RuntimeException(
@@ -209,7 +205,7 @@ public class AmbulanceJourneyService {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                scheduler.schedule(simulationId, () -> tick(simulationId), intervalMs);
+                scheduler.schedule(simulationId, () -> self().tick(simulationId), intervalMs);
                 publisher.publishEvent(simulationId, sim.getMission().getId(),
                         sim.getResource().getId(), "SIMULATION_STARTED");
             }
@@ -217,8 +213,6 @@ public class AmbulanceJourneyService {
 
         return toResponse(sim);
     }
-
-
 
     // ══════════════════════════════════════════════════════
     // DỪNG MÔ PHỎNG
@@ -230,7 +224,7 @@ public class AmbulanceJourneyService {
                 .orElseThrow(() -> new RuntimeException("SIMULATION_NOT_FOUND"));
 
         if (sim.getStatus() == SimulationStatus.STOPPED) {
-            return toResponse(sim); // idempotent
+            return toResponse(sim);
         }
 
         if (sim.getStatus() != SimulationStatus.RUNNING) {
@@ -249,30 +243,26 @@ public class AmbulanceJourneyService {
     }
 
     // ══════════════════════════════════════════════════════
-// CHECKPOINT 3: TIẾP TỤC TỚI BỆNH VIỆN
-// Điều kiện: mission TRANSPORTING + simulation AT_SCENE
-// ══════════════════════════════════════════════════════
+    // CHECKPOINT 3: TIẾP TỤC TỚI BỆNH VIỆN
+    // ══════════════════════════════════════════════════════
     @Transactional
     public SimulationResponse continueToHospital(Long simulationId) {
 
         AmbulanceSimulation sim = simulationRepo.findById(simulationId)
                 .orElseThrow(() -> new RuntimeException("SIMULATION_NOT_FOUND"));
 
-        // Kiểm tra phase đúng
         if (sim.getPhase() != SimulationPhase.AT_SCENE) {
             throw new RuntimeException(
                     "INVALID_PHASE: Simulation phải đang ở AT_SCENE. "
                             + "Phase hiện tại: " + sim.getPhase());
         }
 
-        // Kiểm tra status
         if (sim.getStatus() != SimulationStatus.STOPPED) {
             throw new RuntimeException(
                     "INVALID_STATUS: Simulation phải đang STOPPED tại hiện trường. "
                             + "Status hiện tại: " + sim.getStatus());
         }
 
-        // Kiểm tra mission đang TRANSPORTING
         DispatchMission mission = sim.getMission();
         if (mission.getStatus() != DispatchMissionStatus.TRANSPORTING) {
             throw new RuntimeException(
@@ -280,7 +270,6 @@ public class AmbulanceJourneyService {
                             + "Trạng thái mission hiện tại: " + mission.getStatus());
         }
 
-        // Chuyển sang chặng 2
         sim.setPhase(SimulationPhase.TO_HOSPITAL);
         sim.setStatus(SimulationStatus.RUNNING);
         sim.setElapsedRouteMs(0L);
@@ -291,7 +280,7 @@ public class AmbulanceJourneyService {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                scheduler.schedule(simulationId, () -> tick(simulationId), intervalMs);
+                scheduler.schedule(simulationId, () -> self().tick(simulationId), intervalMs);
                 publisher.publishEvent(simulationId, sim.getMission().getId(),
                         sim.getResource().getId(), "DEPARTED_TO_HOSPITAL");
             }
@@ -310,12 +299,10 @@ public class AmbulanceJourneyService {
                 .orElseThrow(() -> new RuntimeException("SIMULATION_NOT_FOUND")));
     }
 
-
     public TrackingResponse getTracking(Long simulationId) {
         AmbulanceSimulation sim = simulationRepo.findById(simulationId)
                 .orElseThrow(() -> new RuntimeException("SIMULATION_NOT_FOUND"));
 
-        // Lấy leg hiện tại
         LegType currentLegType = (sim.getPhase() == SimulationPhase.TO_SCENE
                 || sim.getPhase() == SimulationPhase.AT_SCENE)
                 ? LegType.TO_SCENE : LegType.TO_HOSPITAL;
@@ -363,9 +350,10 @@ public class AmbulanceJourneyService {
     }
 
     // ══════════════════════════════════════════════════════
-    // TICK — trái tim của mô phỏng, chạy mỗi N ms
+    // TICK — public + @Transactional, PHẢI gọi qua self()
     // ══════════════════════════════════════════════════════
-    private void tick(Long simulationId) {
+    @Transactional
+    public void tick(Long simulationId) {
         try {
             AmbulanceSimulation sim = simulationRepo.findById(simulationId).orElse(null);
             if (sim == null || sim.getStatus() != SimulationStatus.RUNNING) {
@@ -373,7 +361,6 @@ public class AmbulanceJourneyService {
                 return;
             }
 
-            // Lấy leg hiện tại theo phase
             LegType currentLegType = (sim.getPhase() == SimulationPhase.TO_SCENE)
                     ? LegType.TO_SCENE : LegType.TO_HOSPITAL;
 
@@ -387,28 +374,23 @@ public class AmbulanceJourneyService {
                 return;
             }
 
-            // Tổng thời gian chặng (ms)
             double totalDurationMs = currentLeg.getDurationS().doubleValue() * 1000.0
                     / sim.getSpeedMultiplier().doubleValue();
 
-            // Cộng thêm thời gian đã đi
             long newElapsed = sim.getElapsedRouteMs() + sim.getTickIntervalMs();
             sim.setElapsedRouteMs(newElapsed);
             sim.setLastTickAt(OffsetDateTime.now());
 
-            // ── Nội suy vị trí từ geometry ──────────────────
             double[] position = interpolatePosition(currentLeg, newElapsed, totalDurationMs);
             double currentLon = position[0];
             double currentLat = position[1];
 
-            // Tính progress và ETA
             double progressPercent = Math.min(100.0, (newElapsed / totalDurationMs) * 100.0);
             double remainingMs = Math.max(0, totalDurationMs - newElapsed);
             double etaSeconds = remainingMs / 1000.0;
             double remainingDistanceM = currentLeg.getDistanceM().doubleValue()
                     * (1.0 - progressPercent / 100.0);
 
-            // ── Kiểm tra đã đến cuối chặng chưa ────────────
             if (newElapsed >= totalDurationMs) {
                 handlePhaseComplete(sim, currentLon, currentLat, simulationId);
                 return;
@@ -417,23 +399,15 @@ public class AmbulanceJourneyService {
             DispatchResource resource = sim.getResource();
 
             Point resourcePoint = geometryFactory.createPoint(
-                    new Coordinate(
-                            currentLon,
-                            currentLat
-                    )
-            );
-
+                    new Coordinate(currentLon, currentLat));
             resourcePoint.setSRID(4326);
 
             resource.setCurrentLocation(resourcePoint);
             resource.setUpdatedAt(LocalDateTime.now());
-
             resourceRepo.save(resource);
 
-            // Lưu trạng thái
             simulationRepo.save(sim);
 
-            // Phát WebSocket vị trí thật
             publisher.publishPosition(
                     simulationId,
                     sim.getMission().getId(),
@@ -457,21 +431,18 @@ public class AmbulanceJourneyService {
         DispatchResource resource = sim.getResource();
 
         Point resourcePoint = geometryFactory.createPoint(
-                new Coordinate(currentLon, currentLat)
-        );
-
+                new Coordinate(currentLon, currentLat));
         resourcePoint.setSRID(4326);
 
         resource.setCurrentLocation(resourcePoint);
         resource.setUpdatedAt(LocalDateTime.now());
-
         resourceRepo.save(resource);
+
         if (sim.getPhase() == SimulationPhase.TO_SCENE) {
 
-            // ── CHECKPOINT 2: Dừng hẳn tại AT_SCENE, không tự chạy tiếp ──
             sim.setPhase(SimulationPhase.AT_SCENE);
             sim.setElapsedRouteMs(0L);
-            sim.setStatus(SimulationStatus.STOPPED); // dừng, chờ Driver TRANSPORTING
+            sim.setStatus(SimulationStatus.STOPPED);
             simulationRepo.save(sim);
 
             scheduler.cancel(simulationId);
@@ -509,33 +480,11 @@ public class AmbulanceJourneyService {
         }
     }
 
-    // ── Bắt đầu chặng 2: hiện trường → bệnh viện ───────────────────────────
-    private void startToHospitalPhase(Long simulationId) {
-        try {
-            AmbulanceSimulation sim = simulationRepo.findById(simulationId).orElse(null);
-            if (sim == null) return;
-
-            sim.setPhase(SimulationPhase.TO_HOSPITAL);
-            sim.setElapsedRouteMs(0L);
-            simulationRepo.save(sim);
-
-            publisher.publishEvent(simulationId, sim.getMission().getId(),
-                    sim.getResource().getId(), "DEPARTED_TO_HOSPITAL");
-
-            scheduler.schedule(simulationId, () -> tick(simulationId), sim.getTickIntervalMs());
-
-        } catch (Exception e) {
-            log.error("startToHospitalPhase error: {}", e.getMessage());
-            markFailed(simulationId, e.getMessage());
-        }
-    }
-
     // ── Nội suy vị trí trên đường OSRM ─────────────────────────────────────
     private double[] interpolatePosition(SimulationLeg leg,
                                          long elapsedMs,
                                          double totalDurationMs) {
         try {
-            // Parse coordinates từ routePayload JSON
             String payload = leg.getRoutePayload();
             Map<String, Object> geometry = objectMapper.readValue(
                     payload, new TypeReference<>() {});
@@ -547,7 +496,6 @@ public class AmbulanceJourneyService {
                 return defaultPosition(leg);
             }
 
-            // Tính tỉ lệ đã đi (0.0 → 1.0)
             double ratio = Math.min(1.0, elapsedMs / totalDurationMs);
             double targetIndex = ratio * (coordinates.size() - 1);
             int idx = (int) targetIndex;
@@ -557,7 +505,6 @@ public class AmbulanceJourneyService {
                 return new double[]{last.get(0), last.get(1)};
             }
 
-            // Nội suy tuyến tính giữa 2 điểm
             double frac = targetIndex - idx;
             List<Double> p1 = coordinates.get(idx);
             List<Double> p2 = coordinates.get(idx + 1);
@@ -573,12 +520,10 @@ public class AmbulanceJourneyService {
         }
     }
 
-    // Fallback nếu parse geometry lỗi
     private double[] defaultPosition(SimulationLeg leg) {
         return new double[]{105.8342, 21.0278};
     }
 
-    // ── Đánh FAILED khi tick lỗi ────────────────────────────────────────────
     private void markFailed(Long simulationId, String errorMessage) {
         try {
             AmbulanceSimulation sim = simulationRepo.findById(simulationId).orElse(null);
@@ -612,7 +557,6 @@ public class AmbulanceJourneyService {
         res.setErrorCode(s.getErrorCode());
         res.setErrorMessage(s.getErrorMessage());
 
-        // Gán vị trí hiện tại nếu đang chạy
         if (s.getElapsedRouteMs() > 0) {
             LegType legType = (s.getPhase() == SimulationPhase.TO_SCENE
                     || s.getPhase() == SimulationPhase.AT_SCENE)
