@@ -6,6 +6,7 @@ import java.util.Map;
 public record DispatchRequestDto(
     Integer id,
     Integer callId,
+    String reporterPhone,
     Integer serviceTypeId,
     String serviceTypeName,
     Integer zoneId,

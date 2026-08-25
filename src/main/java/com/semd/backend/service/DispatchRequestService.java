@@ -802,6 +802,7 @@ public class DispatchRequestService {
 
     private DispatchRequestDto mapToDto(DispatchRequest req) {
         Integer callId = req.getCall() != null ? req.getCall().getId() : null;
+        String reporterPhone = req.getCall() != null ? req.getCall().getReporterPhone() : null;
         Integer serviceTypeId = req.getServiceType() != null ? req.getServiceType().getId() : null;
         String serviceTypeName = req.getServiceType() != null ? req.getServiceType().getDisplayName() : null;
         // Deprecated - luôn null sau khi bỏ OperationZone
@@ -812,7 +813,7 @@ public class DispatchRequestService {
                 : null;
 
         return new DispatchRequestDto(
-                req.getId(), callId, serviceTypeId, serviceTypeName,
+                req.getId(), callId, reporterPhone, serviceTypeId, serviceTypeName,
                 zoneId, zoneName, dispatcherId, dispatcherName,
                 req.getUrgencyLevel(), req.getLongitude(), req.getLatitude(),
                 req.getStatus() != null ? req.getStatus().name() : null,
