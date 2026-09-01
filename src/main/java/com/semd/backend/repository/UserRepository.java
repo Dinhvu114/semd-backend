@@ -20,4 +20,7 @@ public interface UserRepository extends JpaRepository<User, Integer>, JpaSpecifi
     boolean existsByPhoneNumber(String phoneNumber);
     Page<User> findAllByIsActive(Boolean isActive, Pageable pageable);
     Page<User> findByUsernameContainingIgnoreCase(String username, Pageable pageable);
+
+    // ── THÊM MỚI cho Billing ──────────────────────────────
+    Optional<User> findByPhoneNumber(String phoneNumber);
 }

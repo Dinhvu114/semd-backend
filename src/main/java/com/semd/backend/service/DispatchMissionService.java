@@ -15,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class DispatchMissionService {
@@ -35,6 +37,8 @@ public class DispatchMissionService {
     private final MissionStatusLogRepository statusLogRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final MedicalHospitalRepository hospitalRepository;
+    private final BillingService billingService;
+    private static final Logger log = LoggerFactory.getLogger(DispatchMissionService.class);
 
     public DispatchMissionService(
             DispatchMissionRepository missionRepository,
@@ -42,14 +46,15 @@ public class DispatchMissionService {
             DispatchResourceRepository resourceRepository,
             MissionStatusLogRepository statusLogRepository,
             SimpMessagingTemplate messagingTemplate,
-                MedicalHospitalRepository hospitalRepository) {
+            MedicalHospitalRepository hospitalRepository,
+            BillingService billingService) {   // ← THÊM
         this.missionRepository = missionRepository;
         this.requestRepository = requestRepository;
         this.resourceRepository = resourceRepository;
         this.statusLogRepository = statusLogRepository;
         this.messagingTemplate = messagingTemplate;
         this.hospitalRepository = hospitalRepository;
-
+        this.billingService = billingService;   // ← THÊM
     }
 
     // ══════════════════════════════════════════════════════
@@ -338,12 +343,10 @@ public class DispatchMissionService {
         mission.setCompletedAt(LocalDateTime.now());
         DispatchMission saved = missionRepository.save(mission);
 
-        // Giải phóng xe
         DispatchResource resource = mission.getResource();
         resource.setStatus(DispatchResourceStatus.AVAILABLE);
         resourceRepository.save(resource);
 
-        // Đóng request
         DispatchRequest request = mission.getRequest();
         request.setStatus(DispatchRequestStatus.COMPLETED);
         requestRepository.save(request);
@@ -354,6 +357,13 @@ public class DispatchMissionService {
 
         notifyDispatcher("MISSION_COMPLETED", saved,
                 "Nhiệm vụ hoàn thành. Xe " + resource.getResourceCode() + " đã sẵn sàng");
+
+        // ── BILLING: tạo payment PENDING, KHÔNG được phá golden path ──
+        try {
+            billingService.createEstimatedPayment(saved);
+        } catch (Exception e) {
+            log.error("Không tạo được payment cho mission {}: {}", saved.getId(), e.getMessage());
+        }
 
         return toResponse(saved);
     }
