@@ -10,10 +10,10 @@ public class FareCalculator {
 
     // ── Bảng giá cố định (giai đoạn demo) ──────────────────
     private static final BigDecimal BLS_BASE_FARE     = BigDecimal.valueOf(200000);
-    private static final BigDecimal BLS_PRICE_PER_KM  = BigDecimal.valueOf(400000);
+    private static final BigDecimal BLS_PRICE_PER_KM  = BigDecimal.valueOf(40000);
 
     private static final BigDecimal ALS_BASE_FARE     = BigDecimal.valueOf(300000);
-    private static final BigDecimal ALS_PRICE_PER_KM  = BigDecimal.valueOf(450000);
+    private static final BigDecimal ALS_PRICE_PER_KM  = BigDecimal.valueOf(45000);
 
     public record FareBreakdown(
             String serviceTypeCode,
