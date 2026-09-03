@@ -68,11 +68,15 @@ public class DispatchMissionService {
                 .orElseThrow(() -> new MissionException(404, "REQUEST_NOT_FOUND",
                         "Không tìm thấy dispatch_request id: " + req.getRequestId()));
 
-        // 2. Request phải ở RECOMMENDING (đã qua bước đề xuất xe)
-        if (request.getStatus() != DispatchRequestStatus.RECOMMENDING) {
-            throw new MissionException(409, "REQUEST_NOT_READY_FOR_DISPATCH",
-                    "Request phải ở trạng thái RECOMMENDING trước khi tạo mission. "
-                            + "Trạng thái hiện tại: " + request.getStatus());
+        // 2. Request phải ở CONFIRMED/RECOMMENDING
+        if (request.getStatus() != DispatchRequestStatus.CONFIRMED
+                && request.getStatus() != DispatchRequestStatus.RECOMMENDING) {
+        throw new MissionException(
+                409,
+                "REQUEST_NOT_READY_FOR_DISPATCH",
+                "Request chưa ở trạng thái cho phép tạo mission. "
+                        + "Trạng thái hiện tại: " + request.getStatus()
+        );
         }
 
         // 3. Kiểm tra request chưa có mission đang hoạt động
@@ -236,6 +240,11 @@ public class DispatchMissionService {
         resource.setStatus(DispatchResourceStatus.AVAILABLE);
         resourceRepository.save(resource);
 
+        // Đưa request về bước cho phép điều phối lại
+        DispatchRequest request = mission.getRequest();
+        request.setStatus(DispatchRequestStatus.RECOMMENDING);
+        requestRepository.save(request);
+
         saveLog(saved, DispatchMissionStatus.DISPATCHED,
                 DispatchMissionStatus.REJECTED, "Driver từ chối: " + req.getReason());
 
@@ -379,10 +388,12 @@ public class DispatchMissionService {
                 .orElseThrow(() -> new MissionException(404, "REQUEST_NOT_FOUND",
                         "Không tìm thấy request id: " + requestId));
 
-        // 2. Chỉ redispatch khi request đang DISPATCHED
-        if (request.getStatus() != DispatchRequestStatus.DISPATCHED) {
+        // 2. Chỉ redispatch khi request đang:
+        // - DISPATCHED: đang có mission và dispatcher muốn đổi xe
+        // - RECOMMENDING: mission trước đã reject, request đang chờ chọn xe mới
+        if (request.getStatus() != DispatchRequestStatus.DISPATCHED && request.getStatus() != DispatchRequestStatus.RECOMMENDING) {
             throw new BusinessConflictException(
-                    "Chỉ request ở trạng thái DISPATCHED mới được điều phối lại. "
+                    "Request không ở trạng thái cho phép điều phối lại. "
                             + "Trạng thái hiện tại: " + request.getStatus());
         }
 
