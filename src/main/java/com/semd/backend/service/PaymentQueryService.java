@@ -7,6 +7,7 @@ import com.semd.backend.exception.ResourceNotFoundException;
 import com.semd.backend.repository.PaymentTransactionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.semd.backend.entity.PaymentMethod;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -49,7 +50,7 @@ public class PaymentQueryService {
 
     // ── THÊM MỚI: Reporter xác nhận thanh toán ────────────
     @Transactional
-    public PaymentDetailResponse payPayment(Integer payerId, Long paymentId, String paymentMethod) {
+    public PaymentDetailResponse payPayment(Integer payerId, Long paymentId, PaymentMethod paymentMethod) {
         PaymentTransaction payment = paymentRepo.findById(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch id: " + paymentId));
         assertOwnedByPayer(payment, payerId);
@@ -59,7 +60,14 @@ public class PaymentQueryService {
                     "Giao dịch đã ở trạng thái " + payment.getStatus() + ", không thể thanh toán lại");
         }
 
-        payment.setPaymentMethod(paymentMethod);
+        // CASH chỉ được xác nhận qua Driver /collect-cash, không qua Reporter /pay
+        if (paymentMethod == PaymentMethod.CASH) {
+            throw new BusinessConflictException(
+                    "Thanh toán tiền mặt phải được tài xế xác nhận qua chức năng thu tiền mặt, "
+                            + "không thực hiện tại đây");
+        }
+
+        payment.setPaymentMethod(paymentMethod.name());
         payment.setStatus("SUCCESS");
         payment.setPaidAt(LocalDateTime.now());
         payment.setExternalTransactionId(generateTransactionRef());

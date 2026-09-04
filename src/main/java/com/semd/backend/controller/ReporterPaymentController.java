@@ -59,8 +59,9 @@ public class ReporterPaymentController {
 
     @PostMapping("/{id}/pay")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Xác nhận thanh toán",
-            description = "Reporter xác nhận đã thanh toán qua CASH/VIETQR/VNPAY/MOMO (mô phỏng, chưa tích hợp gateway thật)")
+    @Operation(summary = "Xác nhận thanh toán điện tử",
+            description = "Chỉ chấp nhận VIETQR/VNPAY/MOMO. Thanh toán CASH phải qua Driver collect-cash. "
+                    + "Mô phỏng, chưa tích hợp gateway thật.")
     public ResponseEntity<BaseResponse<PaymentDetailResponse>> payPayment(
             @PathVariable Long id,
             @Valid @RequestBody PayPaymentRequest request,

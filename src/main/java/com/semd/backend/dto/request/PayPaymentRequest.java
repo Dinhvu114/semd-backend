@@ -1,12 +1,13 @@
 package com.semd.backend.dto.request;
 
-import jakarta.validation.constraints.NotBlank;
+import com.semd.backend.entity.PaymentMethod;
+import jakarta.validation.constraints.NotNull;
 
 public class PayPaymentRequest {
 
-    @NotBlank(message = "Phương thức thanh toán không được để trống")
-    private String paymentMethod; // CASH, VIETQR, VNPAY, MOMO
+    @NotNull(message = "Phương thức thanh toán không được để trống")
+    private PaymentMethod paymentMethod;
 
-    public String getPaymentMethod() { return paymentMethod; }
-    public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
+    public PaymentMethod getPaymentMethod() { return paymentMethod; }
+    public void setPaymentMethod(PaymentMethod paymentMethod) { this.paymentMethod = paymentMethod; }
 }
