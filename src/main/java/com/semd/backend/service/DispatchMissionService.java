@@ -34,6 +34,7 @@ public class DispatchMissionService {
     private final DispatchMissionRepository missionRepository;
     private final DispatchRequestRepository requestRepository;
     private final DispatchResourceRepository resourceRepository;
+    private final EmergencyCallRepository emergencyCallRepository;
     private final MissionStatusLogRepository statusLogRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final MedicalHospitalRepository hospitalRepository;
@@ -44,17 +45,19 @@ public class DispatchMissionService {
             DispatchMissionRepository missionRepository,
             DispatchRequestRepository requestRepository,
             DispatchResourceRepository resourceRepository,
+            EmergencyCallRepository emergencyCallRepository,
             MissionStatusLogRepository statusLogRepository,
             SimpMessagingTemplate messagingTemplate,
             MedicalHospitalRepository hospitalRepository,
-            BillingService billingService) {   // ← THÊM
+            BillingService billingService) {   // THÊM
         this.missionRepository = missionRepository;
         this.requestRepository = requestRepository;
         this.resourceRepository = resourceRepository;
+        this.emergencyCallRepository = emergencyCallRepository;
         this.statusLogRepository = statusLogRepository;
         this.messagingTemplate = messagingTemplate;
         this.hospitalRepository = hospitalRepository;
-        this.billingService = billingService;   // ← THÊM
+        this.billingService = billingService;   // THÊM
     }
 
     // ══════════════════════════════════════════════════════
@@ -360,6 +363,11 @@ public class DispatchMissionService {
         request.setStatus(DispatchRequestStatus.COMPLETED);
         requestRepository.save(request);
 
+        EmergencyCall call = request.getCall();
+        if (call != null) {
+        call.setStatus(EmergencyCallStatus.CLOSED);
+        emergencyCallRepository.save(call);
+        }
         saveLog(saved, DispatchMissionStatus.ARRIVED_HOSPITAL,
                 DispatchMissionStatus.COMPLETED,
                 "Hoàn thành nhiệm vụ, xe đã được giải phóng");
