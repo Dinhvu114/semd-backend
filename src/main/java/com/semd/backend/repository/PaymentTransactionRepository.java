@@ -10,6 +10,9 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     Optional<PaymentTransaction> findByMission_Id(Integer missionId);
 
+    // ── THÊM MỚI ──────────────────────────────────────────
+    Optional<PaymentTransaction> findByMission_Request_Call_Id(Integer callId);
+
     List<PaymentTransaction> findByPayer_IdOrderByCreatedAtDesc(Integer payerId);
 
     List<PaymentTransaction> findByDriver_IdOrderByCreatedAtDesc(Integer driverId);

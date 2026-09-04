@@ -1,6 +1,7 @@
 package com.semd.backend.controller;
 
 import com.semd.backend.dto.common.BaseResponse;
+import com.semd.backend.dto.response.DriverEarningDetailResponse;
 import com.semd.backend.dto.response.DriverEarningResponse;
 import com.semd.backend.dto.response.DriverEarningSummaryResponse;
 import com.semd.backend.security.UserPrincipal;
@@ -16,7 +17,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/driver/earnings")
-@Tag(name = "Driver Earning", description = "Xem thu nhập dự kiến của tài xế")
+@Tag(name = "Driver Earning", description = "Xem và xác nhận thu nhập của tài xế")
 public class DriverEarningController {
 
     private final PaymentQueryService paymentQueryService;
@@ -41,5 +42,27 @@ public class DriverEarningController {
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(BaseResponse.success(
                 paymentQueryService.getMyEarningSummary(principal.getId())));
+    }
+
+    // ── THÊM MỚI ──────────────────────────────────────────
+    @GetMapping("/{missionId}")
+    @PreAuthorize("hasRole('DRIVER')")
+    @Operation(summary = "Chi tiết thu nhập theo missionId")
+    public ResponseEntity<BaseResponse<DriverEarningDetailResponse>> getMyEarningByMission(
+            @PathVariable Integer missionId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(BaseResponse.success(
+                paymentQueryService.getMyEarningByMission(principal.getId(), missionId)));
+    }
+
+    @PostMapping("/{missionId}/collect-cash")
+    @PreAuthorize("hasRole('DRIVER')")
+    @Operation(summary = "Xác nhận đã thu tiền mặt",
+            description = "Amount lấy từ PaymentTransaction, KHÔNG nhận từ client để tránh gian lận")
+    public ResponseEntity<BaseResponse<DriverEarningDetailResponse>> collectCash(
+            @PathVariable Integer missionId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(BaseResponse.success(
+                paymentQueryService.collectCash(principal.getId(), missionId)));
     }
 }
