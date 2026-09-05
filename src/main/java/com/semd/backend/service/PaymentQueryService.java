@@ -264,4 +264,12 @@ public class PaymentQueryService {
         res.setPaidAt(p.getPaidAt());
         return res;
     }
+
+    // ── THÊM MỚI: Dispatcher xem payment theo requestId ────
+    public PaymentDetailResponse getPaymentByRequestId(Integer requestId) {
+        PaymentTransaction payment = paymentRepo.findByMission_Request_Id(requestId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Chưa phát sinh cước phí cho request id: " + requestId));
+        return toDetailResponse(payment);
+    }
 }

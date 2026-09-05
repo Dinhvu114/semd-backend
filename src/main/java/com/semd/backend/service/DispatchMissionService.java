@@ -21,6 +21,9 @@ import org.slf4j.LoggerFactory;
 @Service
 public class DispatchMissionService {
 
+    private static final Logger log = LoggerFactory.getLogger(DispatchMissionService.class);
+
+
     // Status được coi là đang hoạt động
     private static final List<DispatchMissionStatus> ACTIVE_STATUSES = List.of(
             DispatchMissionStatus.DISPATCHED,
@@ -34,30 +37,29 @@ public class DispatchMissionService {
     private final DispatchMissionRepository missionRepository;
     private final DispatchRequestRepository requestRepository;
     private final DispatchResourceRepository resourceRepository;
-    private final EmergencyCallRepository emergencyCallRepository;
     private final MissionStatusLogRepository statusLogRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final MedicalHospitalRepository hospitalRepository;
     private final BillingService billingService;
-    private static final Logger log = LoggerFactory.getLogger(DispatchMissionService.class);
+    private final EmergencyCallRepository emergencyCallRepository; // ← THÊM
 
     public DispatchMissionService(
             DispatchMissionRepository missionRepository,
             DispatchRequestRepository requestRepository,
             DispatchResourceRepository resourceRepository,
-            EmergencyCallRepository emergencyCallRepository,
             MissionStatusLogRepository statusLogRepository,
             SimpMessagingTemplate messagingTemplate,
             MedicalHospitalRepository hospitalRepository,
-            BillingService billingService) {   // THÊM
+            BillingService billingService,
+            EmergencyCallRepository emergencyCallRepository) { // ← THÊM
         this.missionRepository = missionRepository;
         this.requestRepository = requestRepository;
         this.resourceRepository = resourceRepository;
-        this.emergencyCallRepository = emergencyCallRepository;
         this.statusLogRepository = statusLogRepository;
         this.messagingTemplate = messagingTemplate;
         this.hospitalRepository = hospitalRepository;
-        this.billingService = billingService;   // THÊM
+        this.billingService = billingService;
+        this.emergencyCallRepository = emergencyCallRepository; // ← THÊM
     }
 
     // ══════════════════════════════════════════════════════
@@ -363,11 +365,12 @@ public class DispatchMissionService {
         request.setStatus(DispatchRequestStatus.COMPLETED);
         requestRepository.save(request);
 
-        EmergencyCall call = request.getCall();
-        if (call != null) {
-        call.setStatus(EmergencyCallStatus.CLOSED);
-        emergencyCallRepository.save(call);
+        // ── THÊM MỚI: Đóng lifecycle EmergencyCall ──────────────
+        if (request.getCall() != null) {
+            request.getCall().setStatus(EmergencyCallStatus.CLOSED);
+            emergencyCallRepository.save(request.getCall());
         }
+
         saveLog(saved, DispatchMissionStatus.ARRIVED_HOSPITAL,
                 DispatchMissionStatus.COMPLETED,
                 "Hoàn thành nhiệm vụ, xe đã được giải phóng");

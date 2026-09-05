@@ -62,7 +62,9 @@ public class BillingService {
         // Lấy quãng đường billable, nếu không có thì bỏ qua (không phá mission)
         Optional<BigDecimal> distanceOpt = distanceResolver.resolveBillableDistanceKm(mission);
         if (distanceOpt.isEmpty()) {
-            log.warn("Mission {} không xác định được quãng đường tính phí, bỏ qua tạo payment",
+            log.warn("KHÔNG TẠO PAYMENT cho mission {}: không xác định được quãng đường tính phí "
+                            + "(có thể do simulation chưa có leg TO_HOSPITAL hoặc OSRM lỗi). "
+                            + "Request sẽ COMPLETED nhưng chưa phát sinh cước — cần kiểm tra simulation của mission này.",
                     mission.getId());
             return;
         }
