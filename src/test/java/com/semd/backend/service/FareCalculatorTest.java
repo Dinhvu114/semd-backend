@@ -3,6 +3,7 @@ package com.semd.backend.service;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -12,22 +13,22 @@ class FareCalculatorTest {
 
     @Test
     void blsFare_10km_shouldCalculateCorrectly() {
-        // 200,000 + 400,000 * 10 = 4,200,000
+        // 200,000 + 40,000 * 10 = 600,000
         FareCalculator.FareBreakdown result = calculator.calculate("BLS", BigDecimal.valueOf(10));
 
         assertEquals(0, result.baseFare().compareTo(BigDecimal.valueOf(200000)));
-        assertEquals(0, result.distanceFare().compareTo(BigDecimal.valueOf(4000000)));
-        assertEquals(0, result.totalFare().compareTo(BigDecimal.valueOf(4200000)));
+        assertEquals(0, result.distanceFare().compareTo(BigDecimal.valueOf(400000)));
+        assertEquals(0, result.totalFare().compareTo(BigDecimal.valueOf(600000)));
     }
 
     @Test
     void alsFare_10km_shouldCalculateCorrectly() {
-        // 300,000 + 450,000 * 10 = 4,800,000
+        // 300,000 + 45,000 * 10 = 750,000
         FareCalculator.FareBreakdown result = calculator.calculate("ALS", BigDecimal.valueOf(10));
 
         assertEquals(0, result.baseFare().compareTo(BigDecimal.valueOf(300000)));
-        assertEquals(0, result.distanceFare().compareTo(BigDecimal.valueOf(4500000)));
-        assertEquals(0, result.totalFare().compareTo(BigDecimal.valueOf(4800000)));
+        assertEquals(0, result.distanceFare().compareTo(BigDecimal.valueOf(450000)));
+        assertEquals(0, result.totalFare().compareTo(BigDecimal.valueOf(750000)));
     }
 
     @Test
@@ -41,7 +42,7 @@ class FareCalculatorTest {
 
         BigDecimal sum = platform.add(driver).add(provider);
 
-        assertEquals(0, sum.setScale(0, java.math.RoundingMode.HALF_UP)
-                .compareTo(fare.totalFare().setScale(0, java.math.RoundingMode.HALF_UP)));
+        assertEquals(0, sum.setScale(0, RoundingMode.HALF_UP)
+                .compareTo(fare.totalFare().setScale(0, RoundingMode.HALF_UP)));
     }
 }
