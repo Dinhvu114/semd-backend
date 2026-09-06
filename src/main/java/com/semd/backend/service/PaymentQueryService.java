@@ -272,4 +272,36 @@ public class PaymentQueryService {
                         "Chưa phát sinh cước phí cho request id: " + requestId));
         return toDetailResponse(payment);
     }
+
+    // ══════════════════════════════════════════════════════
+// ADMIN
+// ══════════════════════════════════════════════════════
+    public List<AdminPaymentResponse> getAllPaymentsForAdmin(String status) {
+        List<PaymentTransaction> payments = (status != null && !status.isBlank())
+                ? paymentRepo.findByStatusOrderByCreatedAtDesc(status.toUpperCase())
+                : paymentRepo.findAllByOrderByCreatedAtDesc();
+
+        return payments.stream().map(this::toAdminResponse).toList();
+    }
+
+    private AdminPaymentResponse toAdminResponse(PaymentTransaction p) {
+        AdminPaymentResponse res = new AdminPaymentResponse();
+        res.setPaymentId(p.getId());
+        res.setMissionId(p.getMission() != null ? p.getMission().getId() : null);
+        res.setDriverId(p.getDriver() != null ? p.getDriver().getId() : null);
+        res.setDriverName(p.getDriver() != null ? p.getDriver().getFullName() : null);
+        res.setProviderId(p.getProvider() != null ? p.getProvider().getId() : null);
+        res.setProviderName(p.getProvider() != null ? p.getProvider().getProviderName() : null);
+        res.setServiceTypeCode(p.getServiceTypeCode());
+        res.setDistanceKm(p.getBillableDistanceKm());
+        res.setGrossFare(p.getAmount());
+        res.setPlatformCommission(p.getCommissionAmount());
+        res.setDriverAmount(p.getDriverAmount());
+        res.setProviderAmount(p.getProviderAmount());
+        res.setStatus(p.getStatus());
+        res.setPaymentMethod(p.getPaymentMethod());
+        res.setPaidAt(p.getPaidAt());
+        res.setCreatedAt(p.getCreatedAt());
+        return res;
+    }
 }

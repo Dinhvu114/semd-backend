@@ -20,4 +20,9 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     List<PaymentTransaction> findByDriver_IdOrderByCreatedAtDesc(Integer driverId);
 
     List<PaymentTransaction> findByProvider_IdOrderByCreatedAtDesc(Integer providerId);
+
+    // ── THÊM MỚI: dùng cho Admin filter ────────────────────
+    List<PaymentTransaction> findByStatusOrderByCreatedAtDesc(String status);
+
+    List<PaymentTransaction> findAllByOrderByCreatedAtDesc();
 }
