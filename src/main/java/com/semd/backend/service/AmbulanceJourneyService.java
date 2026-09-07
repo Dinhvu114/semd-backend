@@ -177,9 +177,15 @@ public class AmbulanceJourneyService {
             return toResponse(sim);
         }
 
-        if (sim.getStatus() != SimulationStatus.READY
-                && sim.getStatus() != SimulationStatus.STOPPED) {
+        if (sim.getStatus() != SimulationStatus.READY) {
             throw new RuntimeException("INVALID_SIMULATION_STATE: " + sim.getStatus());
+        }
+
+        if (sim.getPhase() != SimulationPhase.TO_SCENE) {
+            throw new RuntimeException(
+                    "INVALID_PHASE: /start chỉ dùng cho chặng TO_SCENE. Phase hiện tại: "
+                            + sim.getPhase()
+            );
         }
 
         List<SimulationLeg> legs = legRepo.findBySimulationIdOrderBySequenceNo(simulationId);
