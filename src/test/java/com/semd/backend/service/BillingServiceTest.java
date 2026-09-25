@@ -41,7 +41,7 @@ class BillingServiceTest {
         when(distanceResolver.resolveBillableDistanceKm(mission)).thenReturn(Optional.of(distance));
         when(fareCalculator.calculate("BLS", distance)).thenReturn(fare);
         when(userRepository.findByPhoneNumber("0901000001")).thenReturn(Optional.of(payer));
-
+        when(paymentRepo.save(any(PaymentTransaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
         billingService.createEstimatedPayment(mission);
 
         ArgumentCaptor<PaymentTransaction> captor = ArgumentCaptor.forClass(PaymentTransaction.class);
@@ -65,7 +65,6 @@ class BillingServiceTest {
         DispatchMission mission = new DispatchMission();
         mission.setId(101);
         when(paymentRepo.findByMission_Id(101)).thenReturn(Optional.of(new PaymentTransaction()));
-
         billingService.createEstimatedPayment(mission);
 
         verify(paymentRepo, never()).save(any());
