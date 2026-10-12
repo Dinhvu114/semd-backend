@@ -5,10 +5,10 @@ jwt:
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/semd_test
+    url: jdbc:postgresql://localhost:5432/semd_test_2
     username: postgres
     password: 123456
-
+# old dbs: semd_db, semd_test
 app:
   callback-key: ems-cad-callback-secret-key-789012
   osrm:
