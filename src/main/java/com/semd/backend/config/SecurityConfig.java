@@ -58,7 +58,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8081", "http://127.0.0.1:8081", "https://datn-website-six.vercel.app", "https://*.vercel.app"));
+        configuration.setAllowedOriginPatterns(List.of("http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8081", "http://127.0.0.1:8081", "https://datn-website-six.vercel.app", "https://*.vercel.app"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
@@ -81,13 +81,10 @@ public class SecurityConfig {
                         })
                 )
                 .authorizeHttpRequests(auth -> auth
-                        // Cho phép truy cập tự do vào các tài liệu API, endpoint Auth và callback AI
                         .requestMatchers("/api/v1/hello", "/api/v1/auth/**", "/api/v1/calls/callback", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/ws", "/ws/**").permitAll()
-                        // Mọi API khác cần phải đăng nhập mới sử dụng được
                         .anyRequest().authenticated()
 
                 )
-                // Đăng ký JwtAuthFiller vào chuỗi lọc Spring Security
                 .addFilterBefore(jwtAuthFiller, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

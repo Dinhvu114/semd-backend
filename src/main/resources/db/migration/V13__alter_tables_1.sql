@@ -24,7 +24,7 @@ ON providers(status);
 
 -- review --
 ALTER TABLE reviews
-ADD COLUMN provider_id UUID
+ADD COLUMN provider_id BIGINT
 REFERENCES providers(id);
 
 CREATE INDEX idx_reviews_provider

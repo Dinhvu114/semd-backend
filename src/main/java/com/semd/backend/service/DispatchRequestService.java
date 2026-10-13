@@ -338,33 +338,11 @@ public class DispatchRequestService {
             DispatchResource resource,
             DispatchRequest request,
             LocalDateTime calculatedAt) {
-        System.out.println(
-                "=== CHECK RESOURCE "
-                        + resource.getId()
-                        + " / "
-                        + resource.getResourceCode()
-                        + " ===");
 
-        System.out.println(
-                "driver = "
-                        + (resource.getCurrentDriver() != null));
-
-        System.out.println(
-                "location = "
-                        + resource.getCurrentLocation());
-
-        System.out.println(
-                "updatedAt = "
-                        + resource.getUpdatedAt());
-
-        System.out.println(
-                "calculatedAt = "
-                        + calculatedAt);
 
         if (resource.getCurrentLocation() == null
                 || resource.getCurrentDriver() == null) {
 
-            System.out.println("REJECT: driver/location");
             return false;
         }
 
@@ -373,30 +351,12 @@ public class DispatchRequestService {
                         .isBefore(
                                 calculatedAt.minusSeconds(
                                         LOCATION_STALE_SECONDS))) {
-
-            System.out.println("REJECT: stale location");
             return false;
         }
 
         boolean capability = hasRequiredCapabilities(
                 resource,
                 request);
-
-        System.out.println(
-                "request serviceType = "
-                        + (request.getServiceType() == null
-                                ? null
-                                : request.getServiceType().getId()));
-
-        System.out.println(
-                "resource type = "
-                        + (resource.getResourceType() == null
-                                ? null
-                                : resource.getResourceType().getId()));
-
-        System.out.println(
-                "capability eligible = "
-                        + capability);
 
         return capability;
     }
