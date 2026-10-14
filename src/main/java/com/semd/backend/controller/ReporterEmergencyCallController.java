@@ -132,20 +132,10 @@ public class ReporterEmergencyCallController {
         );
     }
 
-    @GetMapping("/me")
-    @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Lịch sử yêu cầu cấp cứu đã gửi")
-    public ResponseEntity<BaseResponse<List<EmergencyCallResponse>>> getMyEmergencyCalls(
-            @AuthenticationPrincipal UserPrincipal principal
-    ) {
-        return ResponseEntity.ok(BaseResponse.success(
-                callService.getMyCalls(principal.getPhoneNumber())));
-    }
-    
-    @GetMapping("/my-calls")
+    @GetMapping({"/me", "/my-calls"})
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Lấy danh sách cuộc gọi của tôi", description = "Lấy toàn bộ danh sách cuộc gọi khẩn cấp do chính tài khoản này tạo ra")
-    public ResponseEntity<BaseResponse<List<EmergencyCallResponse>>> getMyCalls(
+    public ResponseEntity<BaseResponse<List<EmergencyCallResponse>>> getMyEmergencyCalls(
             @AuthenticationPrincipal UserPrincipal principal
     ) {
         if (principal == null) {
