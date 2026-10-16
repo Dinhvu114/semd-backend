@@ -26,9 +26,13 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class EmergencyCallService {
+
+    private static final Logger log = LoggerFactory.getLogger(EmergencyCallService.class);
 
     private final EmergencyCallRepository callRepository;
     private final FileStorageService fileStorageService;
@@ -103,6 +107,57 @@ public class EmergencyCallService {
         return toResponse(savedCall, savedRequest);
     }
 
+    public boolean isAiWorkerActive() {
+        try {
+            Boolean hasHeartbeat = redisTemplate.hasKey("ai:worker:heartbeat");
+            return Boolean.TRUE.equals(hasHeartbeat);
+        } catch (Exception e) {
+            log.warn("Không thể kiểm tra AI worker heartbeat trên Redis: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    @Transactional
+    public DispatchRequest createFallbackDispatchRequest(EmergencyCall call, String reviewNote) {
+        java.util.Optional<DispatchRequest> existing = dispatchRequestRepository.findFirstByCallIdOrderByCreatedAtDesc(call.getId());
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        ServiceType serviceType = serviceTypeRepository.findByTypeCode("BLS").orElse(null);
+
+        DispatchRequest request = new DispatchRequest();
+        request.setCall(call);
+        request.setServiceType(serviceType);
+        request.setUrgencyLevel("MEDIUM");
+        request.setReviewNote(reviewNote);
+        request.setTargetLocation(call.getLocation());
+        request.setStatus(DispatchRequestStatus.PENDING);
+
+        DispatchRequest saved = dispatchRequestRepository.save(request);
+
+        if (call.getStatus() == EmergencyCallStatus.RECEIVED) {
+            call.setStatus(EmergencyCallStatus.PENDING_REVIEW);
+            callRepository.save(call);
+        }
+
+        return saved;
+    }
+
+    @Transactional
+    public void handleAiTimeout(Integer callId) {
+        EmergencyCall call = callRepository.findById(callId).orElse(null);
+        if (call == null || call.getStatus() != EmergencyCallStatus.RECEIVED) {
+            return;
+        }
+
+        log.warn("Cuộc gọi #{} quá thời gian chờ phản hồi từ AI (15s). Kích hoạt Fallback tạo DispatchRequest.", callId);
+        DispatchRequest request = createFallbackDispatchRequest(call, "[AI_TIMEOUT] Quá thời gian phản hồi từ AI (15s). Cần điều phối viên thẩm định thủ công qua file ghi âm.");
+
+        messagingTemplate.convertAndSend("/topic/calls", call);
+        messagingTemplate.convertAndSend("/topic/dispatches", request);
+    }
+
     @Transactional
     public EmergencyCallResponse createEmergencyVoiceCall(String reporterPhone, String reporterName, Double latitude,
                                                           Double longitude, String audioObjectKey, String description) {
@@ -125,7 +180,25 @@ public class EmergencyCallService {
 
         saveAuditLog(savedCall, longitude, latitude);
 
-        enqueueCallForAI(savedCall.getId(), audioUrl);
+        // 1. Kiểm tra AI Worker có đang hoạt động (gửi heartbeat) không
+        boolean aiActive = isAiWorkerActive();
+        if (!aiActive) {
+            log.info("AI Worker hiện không hoạt động (không có heartbeat). Kích hoạt Fallback tạo DispatchRequest ngay lập tức cho cuộc gọi #{}", savedCall.getId());
+            DispatchRequest fallbackRequest = createFallbackDispatchRequest(savedCall, "[AI_OFFLINE] Dịch vụ AI chưa bật hoặc chưa kết nối. Ca được chuyển thẳng điều phối viên thẩm định thủ công.");
+            messagingTemplate.convertAndSend("/topic/calls", savedCall);
+            messagingTemplate.convertAndSend("/topic/dispatches", fallbackRequest);
+            return toResponse(savedCall, fallbackRequest);
+        }
+
+        // 2. Nếu AI Worker đang chạy: gửi job vào Redis queue như luồng chuẩn ban đầu
+        boolean enqueued = safeEnqueueCallForAI(savedCall.getId(), audioUrl);
+        if (!enqueued) {
+            log.warn("Lỗi đẩy cuộc gọi #{} vào Redis queue AI. Kích hoạt Fallback tức thì.", savedCall.getId());
+            DispatchRequest fallbackRequest = createFallbackDispatchRequest(savedCall, "[REDIS_ERROR] Không thể đẩy dữ liệu vào hàng đợi AI. Cần thẩm định thủ công qua ghi âm.");
+            messagingTemplate.convertAndSend("/topic/calls", savedCall);
+            messagingTemplate.convertAndSend("/topic/dispatches", fallbackRequest);
+            return toResponse(savedCall, fallbackRequest);
+        }
 
         messagingTemplate.convertAndSend("/topic/calls", savedCall);
 
@@ -144,7 +217,7 @@ public class EmergencyCallService {
             auditLog.setChangedAt(LocalDateTime.now());
             auditLogRepository.save(auditLog);
         } catch (Exception e) {
-            System.err.println("Failed to write audit log for emergency call: " + e.getMessage());
+            log.error("Failed to write audit log for emergency call: {}", e.getMessage());
         }
     }
 
@@ -162,7 +235,7 @@ public class EmergencyCallService {
         return data;
     }
 
-    private void enqueueCallForAI(Integer callId, String audioUrl) {
+    private boolean safeEnqueueCallForAI(Integer callId, String audioUrl) {
         try {
             Map<String, Object> jobData = Map.of(
                     "call_id", callId,
@@ -170,18 +243,23 @@ public class EmergencyCallService {
             );
             String jsonMessage = objectMapper.writeValueAsString(jobData);
             redisTemplate.opsForList().leftPush("emergency:ai:queue", jsonMessage);
+            return true;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to enqueue AI processing job to Redis", e);
+            log.error("Failed to enqueue AI processing job to Redis for call #{}: {}", callId, e.getMessage());
+            return false;
         }
     }
 
+    @Transactional
     public EmergencyCall handleAICallback(Integer callId, String transcript, String urgency, Double confidence, List<String> symptoms) {
         EmergencyCall call = callRepository.findById(callId)
                 .orElseThrow(() -> new IllegalArgumentException("Emergency call not found with ID: " + callId));
 
         call.setAiTranscript(transcript);
         call.setAiUrgencyPrediction(urgency);
-        call.setAiConfidenceScore(BigDecimal.valueOf(confidence));
+        if (confidence != null) {
+            call.setAiConfidenceScore(BigDecimal.valueOf(confidence));
+        }
         call.setStatus(EmergencyCallStatus.AI_ANALYZED);
 
         EmergencyCall updatedCall = callRepository.save(call);
@@ -193,22 +271,41 @@ public class EmergencyCallService {
         }
         ServiceType serviceType = serviceTypeRepository.findByTypeCode(serviceTypeCode).orElse(null);
 
-        // Không còn tìm OperationZone — request mang trực tiếp vị trí sự cố
-        DispatchRequest request = new DispatchRequest();
-        request.setCall(updatedCall);
-        request.setServiceType(serviceType);
-        request.setUrgencyLevel(urgency);
-        request.setTargetLocation(updatedCall.getLocation());
-        request.setStatus(DispatchRequestStatus.PENDING);
+        // Kiểm tra xem đã có DispatchRequest chưa (ví dụ đã được tạo trước đó bởi cơ chế Fallback)
+        java.util.Optional<DispatchRequest> existingOpt = dispatchRequestRepository.findFirstByCallIdOrderByCreatedAtDesc(callId);
+        DispatchRequest request;
+        if (existingOpt.isPresent()) {
+            request = existingOpt.get();
+            request.setUrgencyLevel(urgency);
+            if (serviceType != null) {
+                request.setServiceType(serviceType);
+            }
+            if (confidence != null) {
+                request.setAiConfidence(BigDecimal.valueOf(confidence));
+            }
+            String note = request.getReviewNote();
+            request.setReviewNote(note != null ? note + " | [AI Cập nhật sau]: " + urgency : "[AI Cập nhật sau]: " + urgency);
+        } else {
+            // Luồng chuẩn ban đầu (Happy Path): Tạo mới DispatchRequest với kết quả AI
+            request = new DispatchRequest();
+            request.setCall(updatedCall);
+            request.setServiceType(serviceType);
+            request.setUrgencyLevel(urgency);
+            if (confidence != null) {
+                request.setAiConfidence(BigDecimal.valueOf(confidence));
+            }
+            request.setTargetLocation(updatedCall.getLocation());
+            request.setStatus(DispatchRequestStatus.PENDING);
+        }
 
         if (symptoms != null && !symptoms.isEmpty()) {
             request.setExtendedRequirements(Map.of("symptoms", symptoms));
         }
 
-        dispatchRequestRepository.save(request);
+        DispatchRequest savedRequest = dispatchRequestRepository.save(request);
 
         messagingTemplate.convertAndSend("/topic/calls", updatedCall);
-        messagingTemplate.convertAndSend("/topic/dispatches", request);
+        messagingTemplate.convertAndSend("/topic/dispatches", savedRequest);
 
         return updatedCall;
     }

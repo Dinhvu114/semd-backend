@@ -54,6 +54,9 @@ minio:
 app:
   callback-key: ${SPRING_BOOT_CALLBACK_KEY}
 
+  ai:
+    timeout-seconds: ${AI_TIMEOUT_SECONDS:15}
+
   osrm:
     base-url: ${OSRM_BASE_URL}
     profile: driving

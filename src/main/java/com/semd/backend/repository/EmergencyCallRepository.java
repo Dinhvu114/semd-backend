@@ -1,10 +1,13 @@
 package com.semd.backend.repository;
 
 import com.semd.backend.entity.EmergencyCall;
+import com.semd.backend.entity.EmergencyCallStatus;
+import com.semd.backend.entity.EmergencyCallType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import org.springframework.data.jpa.repository.Query;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,6 +23,12 @@ public interface EmergencyCallRepository extends JpaRepository<EmergencyCall, In
 
     @Query("SELECT c FROM EmergencyCall c WHERE c.audioUrl LIKE %:objectKey%")
     java.util.Optional<EmergencyCall> findFirstByAudioUrlContaining(@org.springframework.data.repository.query.Param("objectKey") String objectKey);
+
+    List<EmergencyCall> findByCallTypeAndStatusAndCallStartTimeBefore(
+            EmergencyCallType callType,
+            EmergencyCallStatus status,
+            LocalDateTime callStartTime
+    );
 }
 
 
